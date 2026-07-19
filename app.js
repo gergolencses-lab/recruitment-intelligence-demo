@@ -320,7 +320,6 @@ function renderHome() {
   $("#engFilters").innerHTML = HOME_FILTERS.map(([k, lbl]) =>
     `<button class="filter-pill ${state.homeFilter === k ? "active" : ""}" data-f="${k}">${lbl}</button>`).join("");
   $$("#engFilters .filter-pill").forEach((b) => (b.onclick = () => { state.homeFilter = b.dataset.f; saveUi(); renderHome(); }));
-  renderHomeRail(all);
 
   const listEl = $("#engList");
   if (!all.length) {
@@ -352,26 +351,6 @@ function renderHome() {
   }).join("") + `</div>` : `<div class="eng-empty"><h3>Nincs megbízás ebben a szűrőben</h3><p>Válts szűrőt, vagy hozz létre újat.</p></div>`;
   $$("#engList .eng-card").forEach((r) => (r.onclick = () => openEngagement(r.dataset.id)));
   renderNewEngForm();
-}
-
-// Jobb oldali sötét dashboard-oszlop — a nem lezárt megbízások összesített számai.
-function renderHomeRail(all) {
-  const rail = $("#homeRail"); if (!rail) return;
-  const act = all.filter((p) => p.status !== "Betöltve" && p.status !== "Lezárva");
-  const sum = act.reduce((a, p) => {
-    const s = engStats(p);
-    a.cands += s.cands; a.pipeline += s.pipeline; a.sent += s.sent; a.replied += s.replied;
-    if (needsAttention(p)) a.attn++;
-    return a;
-  }, { cands: 0, pipeline: 0, sent: 0, replied: 0, attn: 0 });
-  const resp = sum.sent ? Math.round((sum.replied / sum.sent) * 100) + "%" : "—";
-  rail.innerHTML = `
-    <div class="rail-title">Összkép</div>
-    <div class="rail-item"><div class="rail-num">${act.length}</div><div class="rail-lbl">aktív megbízás</div><div class="rail-sub">${all.length - act.length} lezárva / betöltve</div></div>
-    <div class="rail-item"><div class="rail-num ${sum.attn ? "coral" : ""}">${sum.attn}</div><div class="rail-lbl">figyelmet igényel</div><div class="rail-sub">hiányzó lépés vagy elakadt jelölt</div></div>
-    <div class="rail-item"><div class="rail-num">${sum.cands}</div><div class="rail-lbl">jelölt a merítésben</div><div class="rail-sub">${sum.pipeline} A/B prioritással</div></div>
-    <div class="rail-item"><div class="rail-num">${sum.sent}</div><div class="rail-lbl">kiküldött megkeresés</div></div>
-    <div class="rail-item"><div class="rail-num mint">${resp}</div><div class="rail-lbl">válaszadási arány</div><div class="rail-sub">${sum.replied}/${sum.sent} rögzített válasz</div></div>`;
 }
 
 // Új megbízás — két lépés: 1) alapadatok, 2) brief
@@ -517,25 +496,11 @@ function progressInfo(p) {
   const done = items.filter((i) => i.done).length;
   return { items, done, total: items.length, pct: Math.round((done / items.length) * 100) };
 }
-// Megbízás-szintű alapszámok (dashboard-kártyák + összkép-oszlop)
-function engStats(p) {
-  const vals = Object.values(p.outreach_status || {});
-  const sent = vals.filter((s) => s && s.sent_at).length;
-  const replied = vals.filter((s) => s && s.replied).length;
-  return {
-    cands: (p.candidates || []).length,
-    newC: (p.candidates || []).filter((c) => c.is_new).length,
-    pipeline: p.ranking ? pipelineRows(p).rows.length : 0,
-    sent, replied,
-    respRate: sent ? Math.round((replied / sent) * 100) : null,
-  };
-}
 function renderOverview(p) {
   const v = $("#view-attekintes");
   const ns = nextStep(p);
   const ms = MILESTONES.map(([lbl, fn]) => `<span class="ms ${fn(p) ? "done" : ""}">${fn(p) ? "✓" : "○"} ${lbl}</span>`).join("");
   const posSum = p.intake ? shorten(p.intake.reframed_brief, 220) : (p.brief_raw ? shorten(p.brief_raw, 220) : "Még nincs brief.");
-  const st = engStats(p);
   v.innerHTML = `
     <div class="next-card">
       <div>
@@ -544,12 +509,6 @@ function renderOverview(p) {
         <div class="next-sub">${esc(ns.sub || "")}</div>
       </div>
       <button class="btn btn-primary" id="nsGo">${esc(ns.cta || "Megnyitás")}</button>
-    </div>
-    <div class="stat-row">
-      <div class="stat-card"><div class="lbl">Jelölt a merítésben</div><div class="num">${st.cands}</div><div class="sub">${st.newC ? st.newC + " új, átnézésre vár" : "nincs átnézetlen új"}</div></div>
-      <div class="stat-card mint"><div class="lbl">Folyamatban (A/B)</div><div class="num">${st.pipeline}</div><div class="sub">prioritásos jelölt</div></div>
-      <div class="stat-card"><div class="lbl">Kiküldött megkeresés</div><div class="num">${st.sent}</div><div class="sub">${Object.keys(p.outreach || {}).length} vázlatból</div></div>
-      <div class="stat-card"><div class="lbl">Válaszadási arány</div><div class="num">${st.respRate == null ? "—" : st.respRate + "%"}</div><div class="sub">${st.replied}/${st.sent} kiküldöttre érkezett válasz</div></div>
     </div>
     <div class="card"><h4>Folyamat</h4><div class="milestones">${ms}</div>
       <div class="kpi-desc" style="margin-top:8px">Nem minden mérföldkő kötelező — bármelyik nézet bármikor megnyitható.</div></div>
