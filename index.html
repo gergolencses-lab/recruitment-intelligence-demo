@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="hu">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Recruitment Intelligence</title>
+  <link rel="stylesheet" href="styles.css" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎯</text></svg>" />
+</head>
+<body>
+  <div class="shell">
+    <!-- ── SIDEBAR ── -->
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand-mark">🎯</div>
+        <div>
+          <div class="brand-name">Recruitment Intelligence</div>
+          <div class="brand-sub">Jelöltközpontú keresés</div>
+        </div>
+      </div>
+
+      <nav class="steps">
+        <a href="#" class="step" data-view="home"><span class="dot"></span>Megbízások</a>
+      </nav>
+
+      <div id="engNav" class="hidden">
+        <div class="side-label" id="engNavLabel">Megbízás</div>
+        <nav class="steps">
+          <a href="#" class="step" data-view="attekintes"><span class="dot"></span>Áttekintés</a>
+          <a href="#" class="step" data-view="pozicio"><span class="dot"></span>Pozíció és brief</a>
+          <a href="#" class="step" data-view="celpiac"><span class="dot"></span>Célpiac</a>
+          <a href="#" class="step" data-view="jeloltek"><span class="dot"></span>Jelöltek</a>
+          <a href="#" class="step" data-view="megkeresesek"><span class="dot"></span>Megkeresések</a>
+          <a href="#" class="step" data-view="ugyfel"><span class="dot"></span>Ügyfél és interjú</a>
+          <a href="#" class="step" data-view="eredmenyek"><span class="dot"></span>Eredmények</a>
+          <a href="#" class="step" data-view="jegyzetek"><span class="dot"></span>Jegyzetek</a>
+        </nav>
+      </div>
+
+      <div class="side-foot">
+        <div class="side-label">Névjegy</div>
+        <div class="badges badges-side" id="badges"><span class="badge badge-mut">állapot…</span></div>
+        <div id="modelLine" class="mut"></div>
+        <div>Az elemzés és az adatkezelés szerver-oldalon fut; a megbízások ebben a böngészőben tárolódnak.</div>
+      </div>
+    </aside>
+
+    <!-- ── MAIN ── -->
+    <main class="main">
+      <header class="topbar">
+        <div class="search-pill">
+          <input id="globalSearch" placeholder="Jelölt keresése…" autocomplete="off" />
+          <span class="kbd">⌘ F</span>
+        </div>
+        <div class="top-right">
+          <div class="badges" id="badgesTop"></div>
+        </div>
+      </header>
+
+      <div class="scroll" id="scroll">
+
+        <!-- ── MEGBÍZÁSOK (nyitóképernyő) ── -->
+        <section id="view-home" class="view">
+          <div class="page-head">
+            <div>
+              <div class="crumbs">Munkatér</div>
+              <h1>Megbízások</h1>
+            </div>
+            <div class="head-actions">
+              <button id="newEngBtn" class="btn btn-primary">Új megbízás</button>
+            </div>
+          </div>
+          <div class="eng-filters" id="engFilters"></div>
+          <div id="newEngForm" class="hidden"></div>
+          <div id="engList"></div>
+        </section>
+
+        <!-- ── MEGBÍZÁS-MUNKATÉR ── -->
+        <section id="workspace" class="hidden">
+          <div id="engHeader"></div>
+
+          <section id="view-attekintes" class="view eng-view"></section>
+
+          <section id="view-pozicio" class="view eng-view">
+            <div class="poz-grid">
+              <div class="stage">
+                <div class="stage-head"><h2>Brief</h2>
+                  <p class="stage-sub">Illeszd be a hiring manager nyers briefjét. Az elemzés eredménye javaslat — te hagyod jóvá vagy szerkeszted.</p></div>
+                <textarea id="briefInput" class="brief" placeholder="Illeszd be a nyers briefet ide…"></textarea>
+                <div class="row" style="margin-top:10px"><button id="intakeBtn" class="btn btn-primary">Brief elemzése</button></div>
+                <div class="stage-head" style="margin-top:18px"><h2>Pozícióadatok</h2></div>
+                <div id="posForm"></div>
+              </div>
+              <div class="stage">
+                <div class="stage-head"><h2>Javasolt pozíció-összefoglaló</h2>
+                  <p class="stage-sub">A rendszer javaslata a briefből — jóváhagyás előtt ellenőrizd.</p></div>
+                <div id="intakeOut" class="out"></div>
+              </div>
+            </div>
+          </section>
+
+          <section id="view-celpiac" class="view eng-view">
+            <div class="stage">
+              <div class="stage-head"><h2>Célpiac</h2>
+                <p class="stage-sub">Hol dolgoznak a szerephez illő emberek, és milyen keresésekkel érdemes megtalálni őket.</p></div>
+              <div class="row">
+                <button id="queryBtn" class="btn">Keresési terv készítése</button>
+                <button id="talentBtn" class="btn">Célpiac-térkép</button>
+                <button id="discoverBtn" class="btn btn-primary">Jelöltkutatás indítása</button>
+              </div>
+              <details class="adv-details"><summary>Adatforrás és részletek</summary>
+                <div class="row" style="margin-top:8px">
+                  <span class="src-toggle">Adatforrás:
+                    <select id="sourceSel">
+                      <option value="auto">automatikus</option>
+                      <option value="firecrawl">nyilvános webes források (élő)</option>
+                      <option value="synthetic">mintaadatok</option>
+                    </select>
+                  </span>
+                </div>
+              </details>
+              <div id="queryOut" class="out"></div>
+              <div id="talentOut" class="out"></div>
+              <div id="discoverNote"></div>
+            </div>
+          </section>
+
+          <section id="view-jeloltek" class="view eng-view"></section>
+
+          <section id="view-megkeresesek" class="view eng-view"></section>
+
+          <section id="view-ugyfel" class="view eng-view">
+            <div class="stage">
+              <div class="stage-head"><h2>Ügyfélegyeztetés</h2>
+                <p class="stage-sub">Felkészülés a hiring managerrel való egyeztetésre: tisztázandó briefpontok, piaci jelek, kockázatok.</p></div>
+              <div class="row"><button id="advisoryBtn" class="btn btn-primary">Egyeztetési javaslatok</button></div>
+              <div id="advisoryOut" class="out"></div>
+            </div>
+            <div class="stage" style="margin-top:16px">
+              <div class="stage-head"><h2>Interjúterv</h2>
+                <p class="stage-sub">Kompetencia-alapú kérdések: mit kérdezz, és mit jelez egy erős válasz.</p></div>
+              <div class="row"><button id="interviewBtn" class="btn btn-primary">Interjúterv készítése</button></div>
+              <div id="interviewOut" class="out"></div>
+            </div>
+          </section>
+
+          <section id="view-eredmenyek" class="view eng-view"></section>
+
+          <section id="view-jegyzetek" class="view eng-view"></section>
+        </section>
+
+        <div class="foot-space"></div>
+      </div>
+    </main>
+  </div>
+
+  <!-- Jelölt részletes nézet (oldalsó panel) -->
+  <div id="candDrawer" class="drawer drawer-wide hidden">
+    <div class="drawer-head"><h3 id="candDrawerTitle">Jelölt</h3><button id="candDrawerClose" class="btn btn-ghost">✕</button></div>
+    <div id="candDrawerBody" class="drawer-body"></div>
+  </div>
+
+  <div id="toast" class="toast hidden"></div>
+
+  <script src="mock-api.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
