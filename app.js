@@ -1,4 +1,4 @@
-// Recruitment Intelligence — frontend (vanilla JS, nulla build).
+// JEL — frontend (vanilla JS, nulla build). Jelöltből jó döntés.
 // Megbízás-alapú munkatér: nézetek (Áttekintés / Pozíció / Célpiac / Jelöltek /
 // Megkeresések / Ügyfél / Eredmények / Jegyzetek), állandó megbízás-fejléccel.
 const $ = (s, r = document) => r.querySelector(s);
@@ -320,6 +320,7 @@ function renderHome() {
   $("#engFilters").innerHTML = HOME_FILTERS.map(([k, lbl]) =>
     `<button class="filter-pill ${state.homeFilter === k ? "active" : ""}" data-f="${k}">${lbl}</button>`).join("");
   $$("#engFilters .filter-pill").forEach((b) => (b.onclick = () => { state.homeFilter = b.dataset.f; saveUi(); renderHome(); }));
+  renderHomeRail(all);
 
   const listEl = $("#engList");
   if (!all.length) {
@@ -329,20 +330,48 @@ function renderHome() {
     return;
   }
   const filtered = all.filter(homeFilterFn(state.homeFilter));
-  listEl.innerHTML = filtered.length ? filtered.map((p) => {
+  listEl.innerHTML = filtered.length ? `<div class="eng-grid">` + filtered.map((p) => {
     const ns = nextStep(p);
     const attn = needsAttention(p);
-    const meta2 = [p.position.location, p.position.work_mode].filter(Boolean).join(" · ") || "—";
-    return `<div class="eng-row" data-id="${esc(p.id)}">
-      <div><div class="eng-title">${esc(p.position.title || p.name)}</div><div class="eng-client">${esc(p.position.client || "—")}</div></div>
-      <div class="eng-meta">${esc(meta2)}<div class="sub">${p.position.owner ? "Felelős: " + esc(p.position.owner) : ""}</div></div>
-      <div><span class="status-chip ${STATUS_CLS[p.status] || ""}">${esc(p.status)}</span>${attn ? `<span class="attn-flag">figyelmet igényel</span>` : ""}</div>
-      <div class="eng-next">${ns ? "Következő: " + esc(ns.label) : ""}<div class="sub">${(p.candidates || []).length} jelölt · ${relTime(p.updated_at)}</div></div>
-      <div class="mut">›</div>
+    const pg = progressInfo(p);
+    const meta2 = [p.position.location, p.position.work_mode, p.position.owner ? "Felelős: " + p.position.owner : ""].filter(Boolean).join(" · ");
+    return `<div class="eng-card" data-id="${esc(p.id)}">
+      <div class="eng-card-top">
+        <div><div class="eng-title">${esc(p.position.title || p.name)}</div><div class="eng-client">${esc(p.position.client || "—")}</div></div>
+        <span class="status-chip ${STATUS_CLS[p.status] || ""}">${esc(p.status)}</span>
+      </div>
+      <div class="pg-mini" title="${pg.done}/${pg.total} mérföldkő kész"><div class="bar"><span style="width:${pg.pct}%"></span></div><span class="d"></span><span class="v">${pg.pct}%</span></div>
+      ${meta2 ? `<div class="eng-meta">${esc(meta2)}</div>` : ""}
+      ${ns ? `<div class="eng-next"><b>Következő:</b> ${esc(ns.label)}</div>` : ""}
+      <div class="eng-card-foot">
+        <span>${(p.candidates || []).length} jelölt</span><span>·</span><span>${relTime(p.updated_at)}</span>
+        <span class="spacer"></span>
+        ${attn ? `<span class="attn-flag">figyelmet igényel</span>` : ""}
+      </div>
     </div>`;
-  }).join("") : `<div class="eng-empty"><h3>Nincs megbízás ebben a szűrőben</h3><p>Válts szűrőt, vagy hozz létre újat.</p></div>`;
-  $$("#engList .eng-row").forEach((r) => (r.onclick = () => openEngagement(r.dataset.id)));
+  }).join("") + `</div>` : `<div class="eng-empty"><h3>Nincs megbízás ebben a szűrőben</h3><p>Válts szűrőt, vagy hozz létre újat.</p></div>`;
+  $$("#engList .eng-card").forEach((r) => (r.onclick = () => openEngagement(r.dataset.id)));
   renderNewEngForm();
+}
+
+// Jobb oldali sötét dashboard-oszlop — a nem lezárt megbízások összesített számai.
+function renderHomeRail(all) {
+  const rail = $("#homeRail"); if (!rail) return;
+  const act = all.filter((p) => p.status !== "Betöltve" && p.status !== "Lezárva");
+  const sum = act.reduce((a, p) => {
+    const s = engStats(p);
+    a.cands += s.cands; a.pipeline += s.pipeline; a.sent += s.sent; a.replied += s.replied;
+    if (needsAttention(p)) a.attn++;
+    return a;
+  }, { cands: 0, pipeline: 0, sent: 0, replied: 0, attn: 0 });
+  const resp = sum.sent ? Math.round((sum.replied / sum.sent) * 100) + "%" : "—";
+  rail.innerHTML = `
+    <div class="rail-title">Összkép</div>
+    <div class="rail-item"><div class="rail-num">${act.length}</div><div class="rail-lbl">aktív megbízás</div><div class="rail-sub">${all.length - act.length} lezárva / betöltve</div></div>
+    <div class="rail-item"><div class="rail-num ${sum.attn ? "coral" : ""}">${sum.attn}</div><div class="rail-lbl">figyelmet igényel</div><div class="rail-sub">hiányzó lépés vagy elakadt jelölt</div></div>
+    <div class="rail-item"><div class="rail-num">${sum.cands}</div><div class="rail-lbl">jelölt a merítésben</div><div class="rail-sub">${sum.pipeline} A/B prioritással</div></div>
+    <div class="rail-item"><div class="rail-num">${sum.sent}</div><div class="rail-lbl">kiküldött megkeresés</div></div>
+    <div class="rail-item"><div class="rail-num mint">${resp}</div><div class="rail-lbl">válaszadási arány</div><div class="rail-sub">${sum.replied}/${sum.sent} rögzített válasz</div></div>`;
 }
 
 // Új megbízás — két lépés: 1) alapadatok, 2) brief
@@ -430,6 +459,14 @@ function renderEngHeader(p) {
     ...(((p.query || {}).synonyms) || []).slice(0, 2),
     pos.salary_band, pos.language,
   ].filter(Boolean).slice(0, 4);
+  // Progress: menta szegmensek futnak be a korall döntési pontba (JEL-motívum).
+  const pg = progressInfo(p);
+  const pgHtml = `<div class="pg" role="progressbar" aria-valuenow="${pg.pct}" aria-valuemin="0" aria-valuemax="100" aria-label="Megbízás előrehaladása">
+    <div class="pg-track">${pg.items.map((m, i) =>
+      `<span class="pg-seg ${m.done ? "done" : ""}${i === pg.done && pg.done < pg.total ? " cur" : ""}" title="${esc(m.label)}${m.done ? " ✓" : ""}"></span>`).join("")}</div>
+    <span class="pg-dot ${pg.pct === 100 ? "full" : ""}"></span>
+    <div class="pg-pct">${pg.pct}%<span class="pg-frac">${pg.done}/${pg.total} lépés</span></div>
+  </div>`;
   $("#engHeader").innerHTML = `<div class="eng-header">
     <div class="eng-header-top">
       <div>
@@ -442,6 +479,7 @@ function renderEngHeader(p) {
         <button class="btn btn-ghost" id="backBtn">← Megbízások</button>
       </div>
     </div>
+    ${pgHtml}
     ${chipsArr.length ? `<div class="eng-chips">${chipsArr.map((c) => `<span class="chip">${esc(c)}</span>`).join("")}</div>` : ""}
   </div>`;
   $("#statusSel").onchange = async (e) => {
@@ -473,11 +511,31 @@ const MILESTONES = [
   ["Megkeresések kiküldve", (p) => Object.values(p.outreach_status || {}).some((s) => s && s.sent_at)],
   ["Válaszok rögzítve", (p) => Object.values(p.outreach_status || {}).some((s) => s && s.replied)],
 ];
+// Előrehaladás a mérföldkövekből — a fejléc-progress bar és a kártyák mini-sávja is ebből él.
+function progressInfo(p) {
+  const items = MILESTONES.map(([label, fn]) => ({ label, done: !!fn(p) }));
+  const done = items.filter((i) => i.done).length;
+  return { items, done, total: items.length, pct: Math.round((done / items.length) * 100) };
+}
+// Megbízás-szintű alapszámok (dashboard-kártyák + összkép-oszlop)
+function engStats(p) {
+  const vals = Object.values(p.outreach_status || {});
+  const sent = vals.filter((s) => s && s.sent_at).length;
+  const replied = vals.filter((s) => s && s.replied).length;
+  return {
+    cands: (p.candidates || []).length,
+    newC: (p.candidates || []).filter((c) => c.is_new).length,
+    pipeline: p.ranking ? pipelineRows(p).rows.length : 0,
+    sent, replied,
+    respRate: sent ? Math.round((replied / sent) * 100) : null,
+  };
+}
 function renderOverview(p) {
   const v = $("#view-attekintes");
   const ns = nextStep(p);
   const ms = MILESTONES.map(([lbl, fn]) => `<span class="ms ${fn(p) ? "done" : ""}">${fn(p) ? "✓" : "○"} ${lbl}</span>`).join("");
   const posSum = p.intake ? shorten(p.intake.reframed_brief, 220) : (p.brief_raw ? shorten(p.brief_raw, 220) : "Még nincs brief.");
+  const st = engStats(p);
   v.innerHTML = `
     <div class="next-card">
       <div>
@@ -486,6 +544,12 @@ function renderOverview(p) {
         <div class="next-sub">${esc(ns.sub || "")}</div>
       </div>
       <button class="btn btn-primary" id="nsGo">${esc(ns.cta || "Megnyitás")}</button>
+    </div>
+    <div class="stat-row">
+      <div class="stat-card"><div class="lbl">Jelölt a merítésben</div><div class="num">${st.cands}</div><div class="sub">${st.newC ? st.newC + " új, átnézésre vár" : "nincs átnézetlen új"}</div></div>
+      <div class="stat-card mint"><div class="lbl">Folyamatban (A/B)</div><div class="num">${st.pipeline}</div><div class="sub">prioritásos jelölt</div></div>
+      <div class="stat-card"><div class="lbl">Kiküldött megkeresés</div><div class="num">${st.sent}</div><div class="sub">${Object.keys(p.outreach || {}).length} vázlatból</div></div>
+      <div class="stat-card"><div class="lbl">Válaszadási arány</div><div class="num">${st.respRate == null ? "—" : st.respRate + "%"}</div><div class="sub">${st.replied}/${st.sent} kiküldöttre érkezett válasz</div></div>
     </div>
     <div class="card"><h4>Folyamat</h4><div class="milestones">${ms}</div>
       <div class="kpi-desc" style="margin-top:8px">Nem minden mérföldkő kötelező — bármelyik nézet bármikor megnyitható.</div></div>
