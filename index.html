@@ -97,29 +97,53 @@
             <div class="stage">
               <div class="stage-head"><h2>Célpiac</h2>
                 <p class="stage-sub">Hol dolgoznak a szerephez illő emberek, és milyen keresésekkel érdemes megtalálni őket. A terv és a térkép a futás után is szerkeszthető — kézzel vagy a stratégia-asszisztenssel.</p></div>
-              <div class="row">
-                <button id="queryBtn" class="btn">Keresési terv készítése</button>
-                <button id="talentBtn" class="btn">Célpiac-térkép</button>
-                <button id="discoverBtn" class="btn btn-primary">Jelöltkutatás indítása</button>
-                <button id="queryResetBtn" class="btn btn-ghost" title="A kézi módosítások elvetésével új tervet kér">Új terv nulláról</button>
-              </div>
-              <details class="adv-details"><summary>Adatforrás és részletek</summary>
-                <div class="row" style="margin-top:8px">
-                  <span class="src-toggle">Adatforrás:
-                    <select id="sourceSel">
-                      <option value="auto">automatikus</option>
-                      <option value="firecrawl">nyilvános webes források (élő)</option>
-                      <option value="synthetic">mintaadatok</option>
-                    </select>
-                  </span>
+
+              <div class="steps3">
+                <div class="stepc" id="stepPlan">
+                  <div class="stepn">① TERV</div>
+                  <div class="stepc-h">Keresési terv</div>
+                  <p class="kpi-desc">Célpozíciók, célcégek, szinonimák és lekérdezések. Ez adja a kutatás alapját.</p>
+                  <div class="row">
+                    <button id="queryBtn" class="btn btn-primary">Keresési terv készítése</button>
+                    <details class="stepmenu"><summary aria-label="További műveletek">⋯</summary>
+                      <button id="queryResetBtn" class="btn btn-ghost" title="A kézi módosítások elvetésével új tervet kér">Új terv nulláról</button>
+                    </details>
+                  </div>
                 </div>
-              </details>
-              <div id="queryOut" class="out"></div>
-              <div id="exclOut" class="out"></div>
-              <div id="talentOut" class="out"></div>
+                <div class="stepc" id="stepMap">
+                  <div class="stepn">② TÉRKÉP</div>
+                  <div class="stepc-h">Célpiac-térkép</div>
+                  <p class="kpi-desc" id="stepMapNote">Célcégek, versenytárs-klaszterek, közösségek.</p>
+                  <div class="row"><button id="talentBtn" class="btn">Célpiac-térkép</button></div>
+                </div>
+                <div class="stepc" id="stepDisc">
+                  <div class="stepn">③ KUTATÁS</div>
+                  <div class="stepc-h">Jelöltkutatás</div>
+                  <p class="kpi-desc" id="stepDiscNote">A terv alapján keresi meg az embereket.</p>
+                  <div class="row">
+                    <button id="discoverBtn" class="btn btn-primary">Jelöltkutatás indítása</button>
+                    <span class="src-toggle">forrás:
+                      <select id="sourceSel" aria-label="Adatforrás">
+                        <option value="auto">automatikus</option>
+                        <option value="firecrawl">nyilvános webes források (élő)</option>
+                        <option value="synthetic">mintaadatok</option>
+                      </select>
+                    </span>
+                  </div>
+                </div>
+              </div>
+
               <div id="discoverNote"></div>
+
+              <div class="cel-grid">
+                <div class="cel-main">
+                  <div id="queryOut" class="out"></div>
+                  <div id="talentOut" class="out"></div>
+                  <div id="stratChat"></div>
+                </div>
+                <aside class="cel-side"><div id="exclOut" class="out"></div></aside>
+              </div>
             </div>
-            <div id="stratChat"></div>
           </section>
 
           <section id="view-jeloltek" class="view eng-view"></section>

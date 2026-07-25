@@ -395,6 +395,12 @@ function pipelineRows(p) {
    Szabálytábla, nem if-létra: a szabályok sorrendben értékelődnek, az első
    találó nyer. Így egy nézet átnevezése egy mező átírása, nem vezérlési
    szerkezet átszabása.                                                   */
+// Kihűlés: kiküldött megkeresés, amire régóta nincs válasz és nincs lépés.
+// Korábban a „következő teendő” és a „figyelmet igényel” eltérő feltételt
+// használt (sent vs. hasAttr) — ugyanarra a fogalomra, két helyen.
+function isCooling(r, coolDays) {
+  return r.sent && !r.replied && (r.touched == null || r.touched > coolDays);
+}
 const NEXT_STEP_RULES = [
   { when: (x) => !x.p.brief_raw && !x.p.intake, view: "pozicio", cta: "Pozíció és brief",
     label: () => "Illeszd be a briefet, majd futtasd az elemzést", sub: () => "A megbízás a brief tisztázásával indul" },
@@ -433,10 +439,7 @@ function nextStep(p) {
     blocked: rows.filter((r) => !(r.hasAttr && r.hasDraft)),
     toReview: rows.filter((r) => r.hasDraft && !r.reviewed && !r.sent),
     toSend: rows.filter((r) => r.reviewed && !r.sent),
-    // FIXME: a cooling feltétele itt (sent && !replied) és a needsAttention-ben
-    // (hasAttr && !replied) eltér. Szándékosan nem egységesítjük ebben a
-    // lépésben — láthatatlan szemantikai változás lenne.
-    cooling: rows.filter((r) => r.sent && !r.replied && (r.touched == null || r.touched > coolDays)),
+    cooling: rows.filter((r) => isCooling(r, coolDays)),
     awaiting: rows.filter((r) => r.sent && !r.replied),
   };
   const rule = NEXT_STEP_RULES.find((r) => r.when(x));
@@ -448,8 +451,7 @@ function needsAttention(p) {
   if (!p.ranking) return false;
   const { rows, coolDays } = pipelineRows(p);
   const blocked = rows.filter((r) => !(r.hasAttr && r.hasDraft)).length;
-  // FIXME: lásd a nextStep cooling-megjegyzését — a két feltétel eltér.
-  const cooling = rows.filter((r) => r.hasAttr && !r.replied && (r.touched == null || r.touched > coolDays)).length;
+  const cooling = rows.filter((r) => isCooling(r, coolDays)).length;
   return blocked > 0 || cooling > 0;
 }
 
@@ -601,14 +603,18 @@ function renderHome() {
   listEl.innerHTML = filtered.length ? `<div class="eng-grid">` + filtered.map((p) => {
     const ns = nextStep(p);
     const attn = needsAttention(p);
-    const pg = progressInfo(p);
+    const fi = funnelInfo(p);
+    const phaseIdx = PHASES.findIndex((f) => f.views.some(([vv]) => vv === (ns ? ns.view : "")));
     const meta2 = [p.position.location, p.position.work_mode, p.position.owner ? "Felelős: " + p.position.owner : ""].filter(Boolean).join(" · ");
     return `<div class="eng-card" data-id="${esc(p.id)}">
       <div class="eng-card-top">
         <div><div class="eng-title">${esc(p.position.title || p.name)}</div><div class="eng-client">${esc(p.position.client || "—")}</div></div>
         <span class="status-chip ${STATUS_CLS[p.status] || ""}">${esc(p.status)}</span>
       </div>
-      <div class="pg-mini" title="${pg.done}/${pg.total} mérföldkő kész"><div class="bar"><span style="width:${pg.pct}%"></span></div><span class="d"></span><span class="v">${pg.pct}%</span></div>
+      <div class="pg-mini" title="${fi.felkutatva} felkutatva · ${fi.prioritasos} prioritásos · ${fi.megkeresve} megkeresve · ${fi.valaszolt} válaszolt">
+        <span class="ph-dots">${PHASES.map((f, i) => `<span class="ph-dot${i <= phaseIdx ? " on" : ""}"></span>`).join("")}</span>
+        <span class="v">${fi.felkutatva} · ${fi.prioritasos} · ${fi.megkeresve} · ${fi.valaszolt}</span>
+      </div>
       ${meta2 ? `<div class="eng-meta">${esc(meta2)}</div>` : ""}
       ${ns ? `<div class="eng-next"><b>Következő:</b> ${esc(ns.label)}</div>` : ""}
       <div class="eng-card-foot">
@@ -707,14 +713,10 @@ function renderEngHeader(p) {
     ...(((p.query || {}).synonyms) || []).slice(0, 2),
     pos.salary_band, pos.language,
   ].filter(Boolean).slice(0, 4);
-  // Progress: menta szegmensek futnak be a korall döntési pontba (JEL-motívum).
-  const pg = progressInfo(p);
-  const pgHtml = `<div class="pg" role="progressbar" aria-valuenow="${pg.pct}" aria-valuemin="0" aria-valuemax="100" aria-label="Megbízás előrehaladása">
-    <div class="pg-track">${pg.items.map((m, i) =>
-      `<span class="pg-seg ${m.done ? "done" : ""}${i === pg.done && pg.done < pg.total ? " cur" : ""}" title="${esc(m.label)}${m.done ? " ✓" : ""}"></span>`).join("")}</div>
-    <span class="pg-dot ${pg.pct === 100 ? "full" : ""}"></span>
-    <div class="pg-pct">${pg.pct}%<span class="pg-frac">${pg.done}/${pg.total} lépés</span></div>
-  </div>`;
+  // A JEL-jel motívuma valódi számokra kötve: keskenyedő menta sávok a
+  // korall döntési pontba. Ugyanaz a forma, mint a márkajel — csak igaz.
+  const fi = funnelInfo(p);
+  const pgHtml = `<div class="funnel-wrap">${funnelHtml(fi)}${fi.kizart ? `<span class="funnel-excl">+${fi.kizart} kizárva</span>` : ""}</div>`;
   $("#engHeader").innerHTML = `<div class="eng-header">
     <div class="eng-header-top">
       <div>
@@ -750,66 +752,86 @@ function renderEngHeader(p) {
 }
 
 // ── ÁTTEKINTÉS ──────────────────────────────────────────────────────────
-const MILESTONES = [
-  ["Brief tisztázva", (p) => !!p.intake],
-  ["Célpiac összeállítva", (p) => !!(p.query || p.talent_map)],
-  ["Jelöltek felkutatva", (p) => (p.candidates || []).length > 0],
-  ["Prioritások ellenőrizve", (p) => !!p.ranking],
-  ["Megkeresések előkészítve", (p) => Object.keys(p.outreach || {}).length > 0],
-  ["Megkeresések kiküldve", (p) => Object.values(p.outreach_status || {}).some((s) => s && s.sent_at)],
-  ["Válaszok rögzítve", (p) => Object.values(p.outreach_status || {}).some((s) => s && s.replied)],
-];
-// Előrehaladás a mérföldkövekből — a fejléc-progress bar és a kártyák mini-sávja is ebből él.
-function progressInfo(p) {
-  const items = MILESTONES.map(([label, fn]) => ({ label, done: !!fn(p) }));
-  const done = items.filter((i) => i.done).length;
-  return { items, done, total: items.length, pct: Math.round((done / items.length) * 100) };
+/* ── TÖLCSÉR ─────────────────────────────────────────────────────────────
+   A haladás nem százalék, hanem emberek száma. A korábbi mérföldkő-sáv azt
+   mérte, megtörtént-e valaha egyszer valami, ezért 100%-ot mutatott olyankor
+   is, amikor állt a munka.
+
+   Hatókör: a kizártak nem számítanak bele — ugyanaz az elv, amit a keresési
+   lefedettség is használ („a valódi merítésre mérünk”). A „megkeresve” és a
+   „válaszolt” viszont NEM szűkül A/B prioritásra: különben egy megkeresett,
+   majd hátrasorolt jelölt visszamenőleg csökkentené a tölcsért.          */
+function funnelInfo(p) {
+  const act = activeCandidates(p);
+  const rows = act.map((c) => candRow(p, c));
+  return {
+    felkutatva: act.length,
+    prioritasos: rows.filter((r) => r.tier === "A" || r.tier === "B").length,
+    megkeresve: rows.filter((r) => r.sent).length,
+    valaszolt: rows.filter((r) => r.replied).length,
+    pozitiv: rows.filter((r) => r.replied && r.sentiment === "pozitív").length,
+    kizart: excludedCandidates(p).length,
+  };
+}
+const FUNNEL_STEPS = [["felkutatva", "felkutatva"], ["prioritasos", "prioritásos"], ["megkeresve", "megkeresve"], ["valaszolt", "válaszolt"]];
+function funnelHtml(fi) {
+  const max = Math.max(1, fi.felkutatva);
+  return `<div class="funnel" role="img" aria-label="${FUNNEL_STEPS.map(([k, l]) => `${fi[k]} ${l}`).join(", ")}">
+    ${FUNNEL_STEPS.map(([k, l]) => `<div class="fseg">
+      <div class="fnum">${fi[k]}</div>
+      <div class="ftrack"><span class="fbar" style="width:${Math.round(Math.min(1, fi[k] / max) * 100)}%"></span></div>
+      <div class="flab">${esc(l)}</div>
+    </div>`).join("")}
+    <span class="fdot${fi.pozitiv ? " full" : ""}" title="${fi.pozitiv} pozitív válasz"></span>
+  </div>`;
 }
 function renderOverview(p) {
   const v = $("#view-attekintes");
   const ns = nextStep(p);
-  const ms = MILESTONES.map(([lbl, fn]) => `<span class="ms ${fn(p) ? "done" : ""}">${fn(p) ? "✓" : "○"} ${lbl}</span>`).join("");
   const posSum = p.intake ? shorten(finalBriefText(p), 220) : (p.brief_raw ? shorten(p.brief_raw, 220) : "Még nincs brief.");
+  // Az elakadt jelöltek ide, a teendő alá kerülnek: ami egy kattintással
+  // elintézhető, azt ne kelljen máshol megkeresni.
+  const { rows, coolDays } = pipelineRows(p);
+  const todo = [];
+  rows.forEach((r) => {
+    if (!r.hasAttr) todo.push({ r, txt: "hiányzik a megközelítési terv", cta: "Terv", tab: "megkozelites" });
+    else if (!r.hasDraft) todo.push({ r, txt: "hiányzik az üzenetvázlat", cta: "Vázlat", tab: "uzenet" });
+    else if (!r.reviewed && !r.sent) todo.push({ r, txt: "a vázlat ellenőrzésre vár", cta: "Ellenőrzés", tab: "uzenet" });
+    else if (r.reviewed && !r.sent) todo.push({ r, txt: "jóváhagyva, még nem ment ki", cta: "Kiküldés", tab: "uzenet" });
+  });
+  rows.forEach((r) => { if (isCooling(r, coolDays)) todo.push({ r, txt: `${r.touched == null ? "még nem volt" : r.touched + " napja nincs"} lépés`, cta: "Utánkövetés", tab: "naplo" }); });
+
   v.innerHTML = `
-    <div class="next-card">
-      <div>
-        <div class="next-lbl">Következő teendő</div>
-        <div class="next-txt">${esc(ns.label)}</div>
-        <div class="next-sub">${esc(ns.sub || "")}</div>
+    <div class="card ov-lead">
+      <div class="next-inline">
+        <div>
+          <div class="next-lbl">Következő teendő</div>
+          <div class="next-txt">${esc(ns.label)}</div>
+          <div class="next-sub">${esc(ns.sub || "")}</div>
+        </div>
+        <button class="btn btn-primary" id="nsGo">${esc(ns.cta || "Megnyitás")}</button>
       </div>
-      <button class="btn btn-primary" id="nsGo">${esc(ns.cta || "Megnyitás")}</button>
+      ${todo.length ? `<div class="todo-list">${todo.slice(0, 5).map((t) => `
+        <div class="todo-row">
+          <span class="tier-badge tb tier-${t.r.tier}">${t.r.tier}</span>
+          <span class="todo-name">${esc(t.r.cand.name || t.r.id)}</span>
+          <span class="todo-need">${esc(t.txt)}</span>
+          <button class="btn todo-cta" data-id="${esc(t.r.id)}" data-tab="${esc(t.tab)}">${esc(t.cta)}</button>
+        </div>`).join("")}
+        ${todo.length > 5 ? `<div class="kpi-desc">…és további ${todo.length - 5} jelölt.</div>` : ""}</div>`
+        : `<div class="ov-empty sm">Minden prioritásos jelöltnél megvan a következő lépés.</div>`}
     </div>
-    <div class="card"><h4>Folyamat</h4><div class="milestones">${ms}</div>
-      <div class="kpi-desc" style="margin-top:8px">Nem minden mérföldkő kötelező — bármelyik nézet bármikor megnyitható.</div></div>
     <div class="ov-grid">
       <div class="ov-col">
         <div class="card"><h4>${p.intake && p.intake_review === "approved" ? "Véglegesített brief" : "Pozíció röviden"} ${p.intake ? aiTag(p.intake_review === "approved") : ""}</h4><p>${esc(posSum)}</p>
-          <div class="row" style="margin-top:6px"><button class="btn" id="ovToPoz">Pozíció és brief</button></div></div>
-        <div id="ovAttention"></div>
+          <div class="row" style="margin-top:6px"><button class="btn" id="ovToPoz">Brief és pozíció</button></div></div>
       </div>
-      <div class="ov-col">
-        <div id="ovCoverage"></div>
-        <div class="card"><h4>Módszertani segítség</h4>
-          <p class="kpi-desc">Írd le, hol tartasz vagy hol akadtál el — javaslatot kapsz a következő lépésre.</p>
-          <div class="row"><input id="coachCtx" class="brief-line" placeholder="Mit csináltál / hol akadtál el? (opcionális)" />
-          <button id="coachBtn" class="btn">Javaslat kérése</button></div>
-          <div id="coachOut" class="out"></div></div>
-      </div>
+      <div class="ov-col"><div id="ovCoverage"></div></div>
     </div>`;
   $("#nsGo").onclick = () => showView(ns.view);
   $("#ovToPoz").onclick = () => showView("pozicio");
-  renderAttentionBlock(p);
+  $$("#view-attekintes .todo-cta").forEach((b) => (b.onclick = () => openPanel(b.dataset.id, b.dataset.tab)));
   renderCoverage(p);
-  const notes = p.coach_notes || [];
-  const last = notes[notes.length - 1];
-  if (last) renderCoach(last);
-  $("#coachBtn").onclick = (e) => withLoading(e.target, async () => {
-    const out = await api("POST", `/api/project/${p.id}/coach`, { context: $("#coachCtx").value });
-    p.coach_notes = p.coach_notes || [];
-    p.coach_notes.push({ ts: new Date().toISOString(), ...out });
-    persist();
-    renderCoach(out);
-  });
 }
 function renderCoach(o) {
   const out = $("#coachOut"); if (!out) return;
@@ -819,29 +841,6 @@ function renderCoach(o) {
     ${o.one_lever_now ? `<p><b>Most bevethető:</b> ${esc(o.one_lever_now)}</p>` : ""}
     ${o.skill_focus ? `<p><b>Készség-fókusz:</b> ${esc(o.skill_focus)}</p>` : ""}
     ${o.encouragement ? `<p class="mut">${esc(o.encouragement)}</p>` : ""}</div>`;
-}
-function renderAttentionBlock(p) {
-  const box = $("#ovAttention"); if (!box) return;
-  if (!p.ranking) { box.innerHTML = ""; return; }
-  const { rows, coolDays } = pipelineRows(p);
-  const blockers = rows.map((r) => {
-    const need = !r.hasAttr ? { txt: "hiányzik a megközelítési terv", cta: "Terv" }
-      : !r.hasDraft ? { txt: "hiányzik az üzenetvázlat", cta: "Vázlat" }
-      : (String(r.cand.art14_status || "").includes("pending") ? { txt: "GDPR Art. 14 rendezetlen", cta: "Megnyit" } : null);
-    return need ? { ...r, need } : null;
-  }).filter(Boolean);
-  const cooling = rows.filter((r) => r.hasAttr && !r.replied && (r.touched == null || r.touched > coolDays))
-    .sort((a, b) => (b.touched == null ? 9999 : b.touched) - (a.touched == null ? 9999 : a.touched));
-  const bHtml = blockers.length ? blockers.slice(0, 8).map((r) => `<div class="stuck-item"><span class="tier-badge tb tier-${r.tier}">${r.tier}</span><span class="stuck-name">${esc(r.cand.name || r.id)}</span><span class="stuck-need">${esc(r.need.txt)}</span><button class="btn stuck-cta" data-id="${r.id}">${r.need.cta}</button></div>`).join("") : `<div class="ov-empty sm">Minden prioritásos jelöltnél megvan a következő lépés.</div>`;
-  const cHtml = cooling.length ? cooling.slice(0, 8).map((r) => `<div class="stuck-item"><span class="stuck-days">${r.touched == null ? "—" : r.touched + "n"}</span><span class="stuck-name">${esc(r.cand.name || r.id)}</span><span class="stuck-need">${r.touched == null ? "még nem volt lépés" : "nincs lépés"}</span><button class="btn stuck-cta touch" data-id="${r.id}">Aktivitás rögzítése</button></div>`).join("") : `<div class="ov-empty sm">Minden prioritásos jelöltnél friss az aktivitás.</div>`;
-  box.innerHTML = `<div class="stuck-grid">
-    <div><div class="ck-sec-head sm"><h3>Hiányzó lépések</h3><span class="ck-sec-note">${blockers.length} jelölt</span></div>${bHtml}</div>
-    <div><div class="ck-sec-head sm"><h3>Figyelmet igénylő jelöltek</h3><span class="ck-sec-note">régóta nincs rajtuk lépés</span></div>${cHtml}</div>
-  </div>
-  ${excludedCandidates(p).length ? `<div class="excl-banner sm"><span><b>${excludedCandidates(p).length} jelölt kizárva a merítésből</b> — az ügyfél jelenlegi vagy volt munkatársai, illetve off-limits cég.</span><button class="btn" id="ovExShow">Megnézem</button></div>` : ""}`;
-  $$("#ovAttention .stuck-cta").forEach((btn) => (btn.onclick = () => btn.classList.contains("touch") ? touchCand(btn.dataset.id) : openDrawer(btn.dataset.id)));
-  const ovEx = $("#ovExShow");
-  if (ovEx) ovEx.onclick = () => { state.openExcluded = true; showView("jeloltek"); };
 }
 function renderCoverage(p) {
   const box = $("#ovCoverage"); if (!box) return;
@@ -1010,12 +1009,27 @@ function renderCelpiac(p) {
   renderTalent(p);
   renderStrategyChat(p);
   $("#discoverNote").innerHTML = p.discover_note ? `<div class="note">${esc(p.discover_note)}</div>` : "";
+  // Vezetett lépcső: a térkép a terv után, a kutatás a térkép után élesedik.
+  // A függés eddig is létezett, csak nem látszott — négy egyenrangú gomb volt.
+  const hasBrief = !!p.intake, hasPlan = !!p.query, hasMap = !!p.talent_map;
   const qb = $("#queryBtn");
-  if (qb) qb.textContent = p.query ? "Keresési terv frissítése" : "Keresési terv készítése";
+  if (qb) { qb.textContent = hasPlan ? "Keresési terv frissítése" : "Keresési terv készítése"; qb.disabled = !hasBrief; }
   const tb = $("#talentBtn");
-  if (tb) tb.textContent = p.talent_map ? "Célpiac-térkép frissítése" : "Célpiac-térkép";
-  if (!p.intake && !p.query) {
-    $("#queryOut").innerHTML = `<div class="dep-note"><span>A keresési tervhez előbb elemezd a briefet.</span><button class="btn" id="depToPoz">Pozíció és brief</button></div>`;
+  if (tb) { tb.textContent = hasMap ? "Célpiac-térkép frissítése" : "Célpiac-térkép készítése"; tb.disabled = !hasPlan; }
+  const db = $("#discoverBtn");
+  if (db) db.disabled = !hasPlan;
+  $("#stepPlan").className = "stepc" + (hasPlan ? " done" : hasBrief ? " cur" : " lock");
+  $("#stepMap").className = "stepc" + (hasMap ? " done" : hasPlan ? " cur" : " lock");
+  $("#stepDisc").className = "stepc" + ((p.candidates || []).length ? " done" : hasPlan ? " cur" : " lock");
+  $("#stepMapNote").textContent = hasPlan
+    ? (hasMap ? `${((p.talent_map || {}).target_companies || []).length} célcég · ${((p.talent_map || {}).competitor_clusters || []).length} klaszter`
+              : "Célcégek, versenytárs-klaszterek, közösségek.")
+    : "Előbb keresési terv kell.";
+  $("#stepDiscNote").textContent = hasPlan
+    ? ((p.candidates || []).length ? `${(p.candidates || []).length} találat · ${activeCandidates(p).length} a merítésben` : "A terv alapján keresi meg az embereket.")
+    : "Előbb keresési terv kell.";
+  if (!hasBrief && !hasPlan) {
+    $("#queryOut").innerHTML = `<div class="dep-note"><span>A keresési tervhez előbb elemezd a briefet.</span><button class="btn" id="depToPoz">Brief és pozíció</button></div>`;
     const b = $("#depToPoz"); if (b) b.onclick = () => showView("pozicio");
   }
 }
@@ -1939,7 +1953,10 @@ function renderInterview(o) {
 // ── EREDMÉNYEK ──────────────────────────────────────────────────────────
 function renderResults(p) {
   const v = $("#view-eredmenyek");
-  const vals = Object.values(p.outreach_status || {});
+  // A számok az aktív merítésre vonatkoznak, ahogy a tölcsér is. Ez akkor
+  // tér el a korábbitól, ha egy megkeresett jelöltet később kizárnak.
+  const actIds = new Set(activeCandidates(p).map((c) => c.id));
+  const vals = Object.keys(p.outreach_status || {}).filter((k) => actIds.has(k)).map((k) => p.outreach_status[k]);
   const sent = vals.filter((s) => s && s.sent_at).length;
   const replied = vals.filter((s) => s && s.replied).length;
   const positive = vals.filter((s) => s && s.replied && s.sentiment === "pozitív").length;
@@ -1954,7 +1971,7 @@ function renderResults(p) {
     <div class="stage-head"><h2>Eredmények</h2>
       <p class="stage-sub">A számok a Megkeresések nézetben rögzített kiküldésekből és válaszokból épülnek — a rendszer nem küld semmit, kitalált számot nem mutatunk.</p></div>
     <div class="res-grid">
-      <div class="res-card"><div class="res-num">${sent}</div><div class="res-lbl">Kiküldött megkeresés</div><div class="res-sub">${Object.keys(p.outreach || {}).length} vázlatból</div></div>
+      <div class="res-card"><div class="res-num">${sent}</div><div class="res-lbl">Kiküldött megkeresés</div><div class="res-sub">${Object.keys(p.outreach || {}).filter((k) => actIds.has(k)).length} vázlatból</div></div>
       <div class="res-card"><div class="res-num acc">${respRate == null ? "—" : respRate + "%"}</div><div class="res-lbl">Válaszadási arány</div><div class="res-sub">${replied}/${sent || 0} kiküldött megkeresésre érkezett válasz</div></div>
       <div class="res-card"><div class="res-num acc">${posRate == null ? "—" : posRate + "%"}</div><div class="res-lbl">Pozitív válaszok aránya</div><div class="res-sub">${positive}/${sent || 0} — a semleges válasz nem számít pozitívnak</div></div>
     </div>
