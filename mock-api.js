@@ -66,6 +66,30 @@
       });
     });
   }
+  // ── Késői találatok ─────────────────────────────────────────────────────
+  // Egy második kutatási kör eredménye: még nincs prioritásuk, és „Új” jelzést
+  // kapnak. A merítésbe a rangsorolás UTÁN kerülnek, ezért nem tolják el a
+  // korábbi tier-besorolásokat (a rangsor tömbindex alapján oszt).
+  function lateFinds() {
+    return [
+      {
+        id: "syn-015", name: "Balogh Réka", headline: "Senior Backend Engineer — ledger, event sourcing",
+        current_company: "(skandináv neobank)", location: "Budapest/Remote, HU", past_companies: ["(régiós PSP)"],
+        signals: [{ signal: "Kettős könyvelésű ledgert vezetett be", strength: "erős" }, { signal: "Konferencia-előadás event sourcingról", strength: "közepes" }],
+      },
+      {
+        id: "syn-016", name: "Nagy Bertalan", headline: "Staff Engineer — payment orchestration",
+        current_company: "(nemzetközi PSP)", location: "Debrecen/Remote, HU", past_companies: ["(kártyatársaság)"],
+        signals: [{ signal: "Napi több millió tranzakciós útvonalválasztó tulajdonosa", strength: "erős" }],
+      },
+    ].map(function (c) {
+      return Object.assign({}, c, {
+        synthetic: true, source_url: null, source_type: "synthetic",
+        art14_status: "n/a (mintaadat)", is_person: true, is_new: true,
+        provenance: { method: "synthetic-pool", query: null, fetched_at: new Date().toISOString() },
+      });
+    });
+  }
   // A kutatás kimenete: a nyers merítés, benne az ügyfélhez kötődőkkel.
   function discoverPool(client) {
     const pool = synthPool(), ins = clientInsiders(client);
@@ -322,14 +346,23 @@
     p.discover_note = "Mintaadatok (senior tech / CEE) — statikus demo, nem valós személyek. Élő kutatáshoz a helyi futtatásnál kell kulcs.";
     p.created_at = daysAgo(6);
     p.ranking = demo.rankTargets({ candidates: p.candidates });
+    // A rangsor tömbindexből oszt tier-t, ezért a késői találatok CSAK a
+    // rangsorolás után kerülnek a merítésbe — így a fenti besorolások állnak.
+    p.candidates.push(...lateFinds());
+    // A recruiter felülbírálata: két jelöltet felhoz a figyelőlistáról.
+    p.priority_overrides = { "syn-006": "B", "syn-007": "A" };
     p.assessments["syn-001"] = demo.profileAssess({ candidate_id: "syn-001" });
-    ["syn-001", "syn-002", "syn-003", "syn-004", "syn-006"].forEach((id) => (p.attraction[id] = demo.attractionStrategy({ candidate_id: id })));
-    ["syn-001", "syn-002"].forEach((id) => (p.outreach[id] = demo.outreachDraft({ candidate_id: id })));
+    ["syn-001", "syn-002", "syn-003", "syn-004", "syn-006", "syn-007"].forEach((id) => (p.attraction[id] = demo.attractionStrategy({ candidate_id: id })));
+    ["syn-001", "syn-002", "syn-003", "syn-004", "syn-007"].forEach((id) => (p.outreach[id] = demo.outreachDraft({ candidate_id: id })));
     p.outreach_status["syn-002"] = { sent_at: daysAgo(3), replied: true, replied_at: daysAgo(2), sentiment: "pozitív", reviewed_at: daysAgo(3) };
     p.outreach_status["syn-001"] = { sent_at: daysAgo(1), reviewed_at: daysAgo(1) };
+    // syn-003: vázlat kész, még nincs ellenőrizve · syn-004: jóváhagyva, még nem ment ki
+    p.outreach_status["syn-004"] = { reviewed_at: daysAgo(2) };
+    // syn-007: kiküldve, negatív választ adott — nem minden válasz jó válasz
+    p.outreach_status["syn-007"] = { sent_at: daysAgo(5), reviewed_at: daysAgo(5), replied: true, replied_at: daysAgo(4), sentiment: "negatív" };
     p.baseline_response_rate = 8;
     // last_touched: az aktívan mozgatottak frissek, kettő már régóta áll
-    const touch = { "syn-001": 1, "syn-002": 2, "syn-003": 1, "syn-004": 11, "syn-006": 14 };
+    const touch = { "syn-001": 1, "syn-002": 2, "syn-003": 1, "syn-004": 11, "syn-006": 14, "syn-007": 4 };
     p.candidates.forEach((c) => { if (touch[c.id] != null) c.last_touched = daysAgo(touch[c.id]); });
     p.talent_map = demo.talentMap();
     p.advisory = demo.clientAdvisory();
@@ -338,7 +371,7 @@
     // ha még nincs ilyen kulcs (először megnyitott statikus demo).
     // A SEED_V emelésekor a MINTA-megbízás frissül a visszatérő látogatónál is
     // (a saját megbízásaihoz nem nyúlunk).
-    const SEED_V = 2;
+    const SEED_V = 3;
     p.seed_version = SEED_V;
     try {
       const LS = "ric.projects.v1", VK = "ric.seed.v";
