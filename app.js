@@ -10,6 +10,7 @@ const state = {
   candView: "board",   // board | list — a tábla az alapértelmezés
   drawerId: null,      // a jelöltpanelben nyitott jelölt
   panelTab: "profil",  // profil · megkozelites · uzenet · naplo
+  notesOpen: false,    // a napló-fiók nyitva van-e
   newEngStep: 0,       // 0 = zárva, 1 = alapadatok, 2 = brief
   openExcluded: false, // a kizárt jelöltek sávja nyitva nyíljon-e
 };
@@ -468,21 +469,76 @@ async function loadStatus() {
 // ── NÉZET-VÁLTÁS ────────────────────────────────────────────────────────
 // A böngészőben eltárolt nézetnév túléli a felület átalakítását. Ha egy nézet
 // megszűnik vagy átnevezik, a visszatérő látogató enélkül üres munkateret kap.
-const VIEWS = ["home", "attekintes", "pozicio", "celpiac", "jeloltek", "ugyfel", "eredmenyek", "jegyzetek"];
+/* Három fázis, mert a munka valóban háromféle: egyszeri előkészítés,
+   ismétlődő jelöltmunka, lezárás. A fázis megmondja, mibe kell ma
+   belenyúlni és mibe nem. */
+const PHASES = [
+  { key: "elokeszites", label: "1 · Előkészítés", views: [
+    ["pozicio", "Brief és pozíció"],
+    ["ugyfel", "Ügyfél-egyeztetés"],
+    ["celpiac", "Célpiac"],
+  ] },
+  { key: "merites", label: "2 · Merítés és megkeresés", views: [
+    ["jeloltek", "Jelöltek"],
+    ["interju", "Interjúterv"],
+  ] },
+  { key: "lezaras", label: "3 · Lezárás", views: [
+    ["eredmenyek", "Eredmények"],
+  ] },
+];
+const VIEWS = ["home", "attekintes"].concat(...PHASES.map((f) => f.views.map(([v]) => v)));
+// A jegyzet már nem nézet, hanem fiók — a régi nézetnév oda irányít.
+const LEGACY_VIEW_REDIRECT = { megkeresesek: "jeloltek", jegyzetek: "attekintes" };
 function showView(v) {
+  if (LEGACY_VIEW_REDIRECT[v]) v = LEGACY_VIEW_REDIRECT[v];
   if (!VIEWS.includes(v)) v = state.project ? "attekintes" : "home";
   if (v !== "home" && !state.project) v = "home";
   state.view = v;
   $("#view-home").classList.toggle("active", v === "home");
   $("#workspace").classList.toggle("hidden", v === "home");
   $$(".eng-view").forEach((s) => s.classList.toggle("active", s.id === "view-" + v));
-  $$(".step").forEach((s) => s.classList.toggle("active", s.dataset.view === v));
   $("#engNav").classList.toggle("hidden", !state.project);
   if (state.project) {
     $("#engNavLabel").textContent = shorten(state.project.position.title || state.project.name, 26);
+    renderEngNav(state.project);
   }
+  $$("[data-view]").forEach((s) => s.classList.toggle("active", s.dataset.view === v));
   render(v);
   saveUi();
+}
+// Van-e már pozitív válasz? Ez oldja fel az interjútervet — és ez NEM
+// ugyanaz, mint hogy „érkezett válasz”: a negatív válasz nem nyit interjút.
+function hasPositiveReply(p) {
+  return Object.values((p && p.outreach_status) || {}).some((s) => s && s.replied && s.sentiment === "pozitív");
+}
+// Mennyi munka áll az egyes fázisokban — a fázisfejléc ezt mutatja.
+function phaseState(p, key) {
+  if (key === "elokeszites") {
+    const done = !!p.intake && p.intake_review === "approved" && !!(p.query || p.talent_map);
+    return { done, note: done ? "✓" : "" };
+  }
+  if (key === "merites") {
+    const b = boardBuckets(p);
+    const open = b.rangsorolatlan.length + b.elokeszites.length + b.jovahagyasra.length;
+    const total = open + b.kikuldve.length + b.valaszolt.length;
+    return { done: total > 0 && open === 0, note: total ? `${open}/${total}` : "" };
+  }
+  const sent = Object.values(p.outreach_status || {}).some((s) => s && s.sent_at);
+  return { done: p.status === "Betöltve" || p.status === "Lezárva", note: sent ? "" : "" };
+}
+function renderEngNav(p) {
+  const box = $("#engSteps");
+  if (!box) return;
+  const gate = !hasPositiveReply(p);
+  box.innerHTML = `<a href="#" class="step" data-view="attekintes"><span class="dot"></span>Áttekintés</a>` +
+    PHASES.map((f) => {
+      const st = phaseState(p, f.key);
+      return `<div class="phase${st.done ? " done" : ""}">
+        <div class="phase-head"><span class="phase-tick">${st.done ? "✓" : "·"}</span>${esc(f.label)}${st.note ? `<span class="phase-note">${esc(st.note)}</span>` : ""}</div>
+        ${f.views.map(([v, lbl]) =>
+          `<a href="#" class="step sub${v === "interju" && gate ? " locked" : ""}" data-view="${v}"><span class="dot"></span>${esc(lbl)}${v === "interju" && gate ? `<span class="step-lock" title="Az első pozitív válasz oldja fel">zárva</span>` : ""}</a>`).join("")}
+      </div>`;
+    }).join("");
 }
 function render(v) {
   if (v === "home") return renderHome();
@@ -493,9 +549,9 @@ function render(v) {
   if (v === "pozicio") renderPositionView(p);
   if (v === "celpiac") renderCelpiac(p);
   if (v === "jeloltek") renderCandidatesView(p);
-  if (v === "ugyfel") renderClientView(p);
+  if (v === "ugyfel") renderAdvisory(p.advisory);
+  if (v === "interju") renderInterviewView(p);
   if (v === "eredmenyek") renderResults(p);
-  if (v === "jegyzetek") renderNotes(p);
 }
 function openEngagement(id, view) {
   const p = lsGet(id);
@@ -510,6 +566,7 @@ function closeEngagement() {
   state.projectId = null;
   state.project = null;
   closeDrawer();
+  closeNotesDrawer();
   showView("home");
 }
 
@@ -1489,6 +1546,29 @@ function renderCandidatesView(p) {
 }
 
 // ── JELÖLT RÉSZLETES NÉZET (oldalsó panel) ──────────────────────────────
+/* Két oldalsó fiók van: a jelöltpanel és a napló. Egyszerre csak az egyik
+   lehet nyitva — a sötétítés és a görgetés-zár közös. */
+function anyDrawerOpen() { return !!state.drawerId || state.notesOpen; }
+function syncScrim() {
+  const on = anyDrawerOpen();
+  $("#scrim").classList.toggle("hidden", !on);
+  document.body.classList.toggle("no-scroll", on);
+}
+function openNotesDrawer() {
+  if (!state.project) return;
+  closeDrawer();
+  state.notesOpen = true;
+  $("#notesDrawer").classList.remove("hidden");
+  syncScrim();
+  renderNotes(state.project);
+  const h = $("#notesTitle"); if (h) h.focus();
+}
+function closeNotesDrawer() {
+  if (!state.notesOpen) return;
+  state.notesOpen = false;
+  $("#notesDrawer").classList.add("hidden");
+  syncScrim();
+}
 const PANEL_TABS = [["profil", "Profil"], ["megkozelites", "Megközelítés"], ["uzenet", "Üzenet"], ["naplo", "Napló"]];
 function openPanel(id, tab) {
   const p = state.project; if (!p) return;
@@ -1498,9 +1578,9 @@ function openPanel(id, tab) {
   state.panelTab = PANEL_TABS.some(([k]) => k === tab) ? tab : "profil";
   if (c.is_new) { c.is_new = false; persist(); }
   closeSearchResults();
+  closeNotesDrawer();
   $("#candDrawer").classList.remove("hidden");
-  $("#scrim").classList.remove("hidden");
-  document.body.classList.add("no-scroll");
+  syncScrim();
   // A telefonos vissza-gomb a panelt zárja, ne a megbízást hagyja el.
   if (!wasOpen) { try { history.pushState({ jelPanel: id }, ""); } catch (e) {} }
   renderDrawer(p, c);
@@ -1510,8 +1590,7 @@ function closeDrawer(fromPop) {
   if (!state.drawerId) return;
   state.drawerId = null;
   $("#candDrawer").classList.add("hidden");
-  $("#scrim").classList.add("hidden");
-  document.body.classList.remove("no-scroll");
+  syncScrim();
   if (!fromPop && history.state && history.state.jelPanel) { try { history.back(); } catch (e) {} }
 }
 // A régi név megmarad, hogy a hívási helyek egy helyen legyenek átvezethetők.
@@ -1829,8 +1908,17 @@ async function setOrStatus(p, id, body) {
 }
 
 // ── ÜGYFÉL ÉS INTERJÚ ───────────────────────────────────────────────────
-function renderClientView(p) {
-  renderAdvisory(p.advisory);
+// Az interjúterv a folyamat végén dolgozik: amíg nincs pozitív válasz,
+// elmagyarázza, mire vár, ahelyett hogy üres képernyőt adna.
+function renderInterviewView(p) {
+  const gate = $("#interjuGate");
+  if (gate) {
+    gate.innerHTML = hasPositiveReply(p) ? "" :
+      `<div class="dep-note"><span>Az interjúterv az első <b>pozitív</b> válasz után válik hasznossá — addig nem tudni, kivel készül. A negatív és a semleges válasz nem oldja fel.</span>
+       <button class="btn btn-primary" id="gateToCand">Jelöltek</button></div>`;
+    const g = $("#gateToCand");
+    if (g) g.onclick = () => showView("jeloltek");
+  }
   renderInterview(p.interview);
 }
 function renderAdvisory(o) {
@@ -1908,27 +1996,37 @@ function renderResults(p) {
 
 // ── JEGYZETEK ───────────────────────────────────────────────────────────
 function renderNotes(p) {
-  const v = $("#view-jegyzetek");
-  const mem = (p.memory || []).slice().reverse();
+  const v = $("#notesBody");
+  if (!v) return;
   const cands = p.candidates || [];
   const f = renderNotes._filter || "";
+  const mem = (p.memory || []).slice().reverse();
   const shown = f ? mem.filter((e) => (e.kind || "note") === f) : mem;
-  v.innerHTML = `<div class="stage">
-    <div class="stage-head"><h2>Jegyzetek</h2>
-      <p class="stage-sub">Megbízás- és jelölt-szintű jegyzetek, időrendben.</p></div>
-    <div class="row">
-      <select id="noteKind"><option value="note">megbízás</option><option value="candidate">jelölt</option></select>
-      <select id="noteCand" class="hidden">${cands.map((c) => `<option value="${esc(c.id)}">${esc(c.name)}</option>`).join("")}</select>
-      <input id="noteInput" class="brief-line" placeholder="Jegyzet…" />
-      <button id="noteSave" class="btn btn-primary">Mentés</button>
-      <select id="noteFilter" style="margin-left:auto"><option value="">minden jegyzet</option><option value="note" ${f === "note" ? "selected" : ""}>megbízás</option><option value="candidate" ${f === "candidate" ? "selected" : ""}>jelölt</option></select>
+  const nameOf = (id) => (candById(p, id) || {}).name || id;
+  const coach = (p.coach_notes || [])[(p.coach_notes || []).length - 1];
+  v.innerHTML = `
+    <div class="d-sec"><h5>Új jegyzet</h5>
+      <div class="row">
+        <select id="noteKind"><option value="note">megbízás</option><option value="candidate">jelölt</option></select>
+        <select id="noteCand" class="hidden">${cands.map((c) => `<option value="${esc(c.id)}">${esc(c.name)}</option>`).join("")}</select>
+      </div>
+      <div class="row" style="margin-top:8px">
+        <input id="noteInput" class="brief-line" placeholder="Jegyzet…" />
+        <button id="noteSave" class="btn btn-primary">Mentés</button>
+      </div>
     </div>
-    <div style="margin-top:12px">${shown.map((e) => {
-      const cn = e.candidate_id ? (candById(p, e.candidate_id) || {}).name : null;
-      return `<div class="note-row"><span class="note-kind">${e.kind === "candidate" ? "jelölt" : "megbízás"}</span>
-        <div class="note-body">${cn ? `<b>${esc(cn)}</b> — ` : ""}${esc(e.note)}<div class="note-ts">${esc((e.ts || "").slice(0, 16).replace("T", " "))}</div></div></div>`;
-    }).join("") || `<div class="ov-empty sm">Még nincs jegyzet.</div>`}</div>
-  </div>`;
+    <div class="d-sec"><h5>Módszertani segítség</h5>
+      <p class="kpi-desc" style="margin-top:0">Írd le, hol tartasz vagy hol akadtál el — javaslatot kapsz a következő lépésre.</p>
+      <div class="row"><input id="coachCtx" class="brief-line" placeholder="Mit csináltál / hol akadtál el? (opcionális)" />
+        <button id="coachBtn" class="btn">Javaslat kérése</button></div>
+      <div id="coachOut" class="out"></div>
+    </div>
+    <div class="d-sec"><h5>Előzmény
+        <select id="noteFilter" style="margin-left:auto"><option value="">minden</option><option value="note" ${f === "note" ? "selected" : ""}>megbízás</option><option value="candidate" ${f === "candidate" ? "selected" : ""}>jelölt</option></select>
+      </h5>
+      ${renderNoteList(shown, { candidateName: nameOf, empty: "Még nincs jegyzet ebben a megbízásban." })}
+    </div>`;
+  if (coach) renderCoach(coach);
   $("#noteKind").onchange = (e) => $("#noteCand").classList.toggle("hidden", e.target.value !== "candidate");
   $("#noteFilter").onchange = (e) => { renderNotes._filter = e.target.value; renderNotes(p); };
   $("#noteSave").onclick = () => {
@@ -1941,6 +2039,13 @@ function renderNotes(p) {
     renderNotes(p);
     toast("Jegyzet mentve.");
   };
+  $("#coachBtn").onclick = (e) => withLoading(e.target, async () => {
+    const out = await api("POST", `/api/project/${p.id}/coach`, { context: $("#coachCtx").value });
+    p.coach_notes = p.coach_notes || [];
+    p.coach_notes.push({ ts: new Date().toISOString(), ...out });
+    persist();
+    renderCoach(out);
+  });
 }
 
 // ── STATIKUS GOMBOK (pozíció / célpiac / ügyfél nézetek) ────────────────
@@ -2046,14 +2151,20 @@ $("#interviewBtn").onclick = (e) => needEngagement() && withLoading(e.target, as
 // ── GLOBÁLIS ────────────────────────────────────────────────────────────
 $("#newEngBtn").onclick = () => { if (state.view !== "home") closeEngagement(); openNewEngForm(); };
 $("#candDrawerClose").onclick = () => closeDrawer();
-$("#scrim").onclick = () => closeDrawer();
+$("#scrim").onclick = () => { closeDrawer(); closeNotesDrawer(); };
+$("#notesClose").onclick = () => closeNotesDrawer();
+$("#notesOpen").onclick = () => openNotesDrawer();
 window.addEventListener("popstate", () => { if (state.drawerId) closeDrawer(true); });
-$$(".step").forEach((s) => (s.onclick = (e) => {
+// Eseménydelegálás: az oldalsáv újrarenderelése után is működik, és a
+// későbbi navigációs elemek ingyen megkapják.
+document.addEventListener("click", (e) => {
+  const a = e.target.closest("[data-view]");
+  if (!a) return;
   e.preventDefault();
-  const v = s.dataset.view;
+  const v = a.dataset.view;
   if (v === "home") { closeEngagement(); return; }
   showView(v);
-}));
+});
 
 /* ── GLOBÁLIS KERESŐ ─────────────────────────────────────────────────────
    A gépelés nem visz el sehova. A Jelöltek nézetben helyben szűr, máshol
@@ -2103,13 +2214,18 @@ document.addEventListener("keydown", (e) => {
     e.preventDefault();
     $("#globalSearch").focus();
   }
+  if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "j" && state.project) {
+    e.preventDefault();
+    state.notesOpen ? closeNotesDrawer() : openNotesDrawer();
+  }
   if (e.key === "Escape") {
     if (!$("#searchResults").classList.contains("hidden")) closeSearchResults();
+    else if (state.notesOpen) closeNotesDrawer();
     else closeDrawer();
   }
   // Fókuszcsapda: nyitott panelből a Tab ne szökjön ki a háttérbe.
-  if (e.key === "Tab" && state.drawerId) {
-    const f = $$('a[href],button:not([disabled]),input:not([disabled]),select,textarea,[tabindex]:not([tabindex="-1"])', $("#candDrawer"))
+  if (e.key === "Tab" && anyDrawerOpen()) {
+    const f = $$('a[href],button:not([disabled]),input:not([disabled]),select,textarea,[tabindex]:not([tabindex="-1"])', state.drawerId ? $("#candDrawer") : $("#notesDrawer"))
       .filter((n) => n.offsetParent !== null);
     if (!f.length) return;
     const first = f[0], last = f[f.length - 1];
