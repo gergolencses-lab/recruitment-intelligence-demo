@@ -1,0 +1,865 @@
+<!doctype html>
+<html lang="hu">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>JEL — munkafolyamat-terv</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><rect width='64' height='64' rx='14' fill='%23263653'/><g stroke-linecap='round' stroke-width='7' fill='none'><path d='M14 17 L38 27' stroke='%23FF5A5F'/><path d='M14 32 L36 32' stroke='%2320CFA8'/><path d='M14 47 L38 37' stroke='%2320CFA8'/></g><circle cx='48' cy='32' r='5.5' fill='%23FF5A5F'/></svg>" />
+</head>
+<body>
+<style>
+/* ─────────────────────────────────────────────────────────────
+   Tokenek: a JEL saját design-nyelvéből (styles.css :root),
+   hogy a terv ugyanazon a hangon szóljon, mint a termék.
+   ───────────────────────────────────────────────────────────── */
+:root{
+  --paper:#F6F4EF;
+  --surface:#FFFFFF;
+  --surface-2:#FBFAF6;
+  --navy:#263653;
+  --navy-2:#1D2A43;
+  --ink:#172238;
+  --ink-2:#2A3550;
+  --mut:#6F7890;
+  --mut-2:#8B93A8;
+  --line:#EAE6DC;
+  --line-2:#DDD8CA;
+  --mint:#1DBF9C;
+  --mint-ink:#0B7D66;
+  --mint-soft:#E2F6F0;
+  --coral:#FF5A5F;
+  --coral-ink:#D93A40;
+  --coral-soft:#FFE9E9;
+  --warn-ink:#8A5D10;
+  --warn-soft:#F9EFD9;
+  --tier-b:#5E7DBC; --tier-b-ink:#3D5A96; --tier-b-soft:#E4EBF7;
+  --k-bg:#263653; --k-ink:#FFFFFF; --k-bd:#263653;
+  --side-ink:rgba(255,255,255,.72);
+  --side-mut:rgba(255,255,255,.42);
+  --shadow:0 1px 2px rgba(23,34,56,.05), 0 8px 24px rgba(23,34,56,.06);
+
+  --font:"Avenir Next","Avenir","Futura","Segoe UI",system-ui,-apple-system,sans-serif;
+  --mono:ui-monospace,"SF Mono","JetBrains Mono",Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root{
+    --paper:#141C2C; --surface:#1B2537; --surface-2:#202B40;
+    --navy:#0F1726; --navy-2:#0B111D;
+    --ink:#EDF0F6; --ink-2:#DCE2EE; --mut:#98A2B8; --mut-2:#7C879E;
+    --line:#2B3752; --line-2:#36445F;
+    --mint:#2FD3AE; --mint-ink:#6FE6CA; --mint-soft:#123A33;
+    --coral:#FF6B70; --coral-ink:#FF9297; --coral-soft:#3A1D20;
+    --warn-ink:#E0B86A; --warn-soft:#3A2E16;
+    --tier-b:#5E7DBC; --tier-b-ink:#9BB4E4; --tier-b-soft:#1E2C48;
+    --k-bg:#123A33; --k-ink:#6FE6CA; --k-bd:#2FD3AE;
+    --shadow:0 1px 2px rgba(0,0,0,.3), 0 8px 24px rgba(0,0,0,.28);
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#141C2C; --surface:#1B2537; --surface-2:#202B40;
+  --navy:#0F1726; --navy-2:#0B111D;
+  --ink:#EDF0F6; --ink-2:#DCE2EE; --mut:#98A2B8; --mut-2:#7C879E;
+  --line:#2B3752; --line-2:#36445F;
+  --mint:#2FD3AE; --mint-ink:#6FE6CA; --mint-soft:#123A33;
+  --coral:#FF6B70; --coral-ink:#FF9297; --coral-soft:#3A1D20;
+  --warn-ink:#E0B86A; --warn-soft:#3A2E16;
+  --tier-b:#5E7DBC; --tier-b-ink:#9BB4E4; --tier-b-soft:#1E2C48;
+  --k-bg:#123A33; --k-ink:#6FE6CA; --k-bd:#2FD3AE;
+  --shadow:0 1px 2px rgba(0,0,0,.3), 0 8px 24px rgba(0,0,0,.28);
+}
+:root[data-theme="light"]{
+  --paper:#F6F4EF; --surface:#FFFFFF; --surface-2:#FBFAF6;
+  --navy:#263653; --navy-2:#1D2A43;
+  --ink:#172238; --ink-2:#2A3550; --mut:#6F7890; --mut-2:#8B93A8;
+  --line:#EAE6DC; --line-2:#DDD8CA;
+  --mint:#1DBF9C; --mint-ink:#0B7D66; --mint-soft:#E2F6F0;
+  --coral:#FF5A5F; --coral-ink:#D93A40; --coral-soft:#FFE9E9;
+  --warn-ink:#8A5D10; --warn-soft:#F9EFD9;
+  --tier-b:#5E7DBC; --tier-b-ink:#3D5A96; --tier-b-soft:#E4EBF7;
+  --k-bg:#263653; --k-ink:#FFFFFF; --k-bd:#263653;
+  --shadow:0 1px 2px rgba(23,34,56,.05), 0 8px 24px rgba(23,34,56,.06);
+}
+
+*{box-sizing:border-box}
+body{
+  margin:0; background:var(--paper); color:var(--ink-2);
+  font-family:var(--font); font-size:16px; line-height:1.62;
+  -webkit-font-smoothing:antialiased;
+}
+:focus-visible{outline:2px solid var(--mint); outline-offset:3px; border-radius:3px}
+@media (prefers-reduced-motion: reduce){*{animation:none!important; transition:none!important}}
+
+.wrap{max-width:1120px; margin:0 auto; padding:0 24px 96px}
+
+/* ── Fejléc ── */
+.mast{
+  background:var(--navy); color:#fff; margin-bottom:44px;
+  border-bottom:3px solid var(--coral);
+}
+.mast-in{max-width:1120px; margin:0 auto; padding:44px 24px 40px; display:flex; gap:26px; align-items:flex-start}
+.mark{width:56px; height:56px; flex:none}
+.mast h1{
+  font-size:clamp(28px,4.4vw,42px); line-height:1.1; margin:8px 0 12px;
+  font-weight:800; letter-spacing:-.02em; color:#fff; text-wrap:balance;
+}
+.eyebrow{
+  font-family:var(--mono); font-size:11px; letter-spacing:.16em; text-transform:uppercase;
+  color:rgba(255,255,255,.55); font-weight:600;
+}
+.mast p{margin:0; color:rgba(255,255,255,.74); max-width:62ch; font-size:16.5px}
+.mast .who{margin-top:14px; font-family:var(--mono); font-size:12px; color:rgba(255,255,255,.45)}
+
+/* ── Szekciók ── */
+section{margin-top:56px}
+h2{
+  font-size:13px; font-family:var(--mono); letter-spacing:.14em; text-transform:uppercase;
+  color:var(--mut); font-weight:700; margin:0 0 6px;
+  display:flex; align-items:center; gap:10px;
+}
+h2::before{
+  content:""; width:22px; height:2px; background:var(--coral); flex:none;
+}
+.lede{
+  font-size:26px; line-height:1.32; font-weight:700; letter-spacing:-.015em;
+  color:var(--ink); margin:0 0 18px; max-width:34ch; text-wrap:balance;
+}
+h3{font-size:18.5px; line-height:1.35; font-weight:750; color:var(--ink); margin:32px 0 8px; letter-spacing:-.01em; text-wrap:balance}
+p{max-width:68ch; margin:0 0 14px}
+strong{color:var(--ink); font-weight:700}
+code{font-family:var(--mono); font-size:.86em; background:var(--surface-2); border:1px solid var(--line); border-radius:5px; padding:1px 5px; color:var(--ink)}
+a{color:var(--mint-ink)}
+
+/* ── Leletlista ── */
+.finds{list-style:none; padding:0; margin:22px 0 0; display:flex; flex-direction:column; gap:2px}
+.find{
+  background:var(--surface); border:1px solid var(--line); border-left:3px solid var(--coral);
+  border-radius:10px; padding:16px 20px; display:grid; grid-template-columns:auto 1fr; gap:0 16px;
+}
+.find + .find{margin-top:10px}
+.find-n{
+  font-family:var(--mono); font-size:12px; font-weight:700; color:var(--coral-ink);
+  padding-top:3px; font-variant-numeric:tabular-nums;
+}
+.find-h{font-weight:750; color:var(--ink); font-size:16.5px; line-height:1.4}
+.find-b{grid-column:2; margin:5px 0 0; font-size:15px; color:var(--ink-2); max-width:70ch}
+.find-b p{margin:0 0 8px; max-width:none}
+.find-b p:last-child{margin:0}
+.src{
+  display:inline-block; font-family:var(--mono); font-size:11.5px; color:var(--mut);
+  background:var(--surface-2); border:1px solid var(--line); border-radius:5px;
+  padding:1px 6px; margin-top:6px; white-space:nowrap;
+}
+
+/* ── Wireframe-rendszer ── */
+.figure{margin:26px 0 8px}
+.figure-cap{
+  font-family:var(--mono); font-size:11.5px; letter-spacing:.09em; text-transform:uppercase;
+  color:var(--mut); margin:0 0 10px; font-weight:600;
+}
+.scrollx{overflow-x:auto; padding-bottom:6px}
+.wf{
+  min-width:760px; background:var(--surface); border:1px solid var(--line-2);
+  border-radius:12px; overflow:hidden; box-shadow:var(--shadow); display:flex;
+  font-size:12px; line-height:1.45;
+}
+.wf-side{
+  width:168px; flex:none; background:var(--navy); color:var(--side-ink);
+  padding:14px 10px; display:flex; flex-direction:column; gap:3px;
+}
+.wf-brand{color:#fff; font-weight:800; letter-spacing:.05em; font-size:15px; padding:0 8px 12px}
+.wf-lab{
+  font-family:var(--mono); font-size:9.5px; letter-spacing:.11em; text-transform:uppercase;
+  color:var(--side-mut); padding:12px 8px 4px; font-weight:700;
+}
+.wf-nav{padding:6px 9px; border-radius:6px; color:var(--side-ink)}
+.wf-nav.on{background:rgba(255,255,255,.13); color:#fff; font-weight:700}
+.wf-nav.sub{padding-left:18px; font-size:11.5px}
+.wf-nav .tick{color:var(--mint); font-family:var(--mono)}
+.wf-nav .cnt{float:right; font-family:var(--mono); font-size:10.5px; color:var(--side-mut)}
+.wf-main{flex:1; padding:14px 16px; background:var(--paper); display:flex; flex-direction:column; gap:11px; min-width:0}
+.wf-h{font-size:15px; font-weight:800; color:var(--ink); letter-spacing:-.01em}
+.wf-sub{color:var(--mut); font-size:11.5px}
+
+.card{background:var(--surface); border:1px solid var(--line); border-radius:9px; padding:11px 13px}
+.card.hi{border-color:var(--coral); border-left-width:3px}
+.card.mint{border-color:var(--mint); background:var(--mint-soft)}
+.card.ghost{background:transparent; border-style:dashed; color:var(--mut)}
+.ct{font-family:var(--mono); font-size:9.5px; letter-spacing:.11em; text-transform:uppercase; color:var(--mut); font-weight:700; margin-bottom:6px}
+
+.chip{
+  display:inline-block; font-size:10.5px; padding:1.5px 8px; border-radius:20px;
+  background:var(--surface-2); border:1px solid var(--line-2); color:var(--ink-2); white-space:nowrap;
+}
+.chip.g{background:var(--mint-soft); border-color:var(--mint); color:var(--mint-ink)}
+.chip.w{background:var(--warn-soft); border-color:#D8BE84; color:var(--warn-ink)}
+.chip.r{background:var(--coral-soft); border-color:var(--coral); color:var(--coral-ink)}
+.btn{
+  display:inline-block; font-size:11px; font-weight:700; padding:4px 10px; border-radius:7px;
+  border:1px solid var(--line-2); background:var(--surface); color:var(--ink-2); white-space:nowrap;
+}
+.btn.p{background:var(--mint); border-color:var(--mint); color:#04302A}
+.row{display:flex; gap:7px; align-items:center; flex-wrap:wrap}
+.spread{display:flex; gap:12px; align-items:center; justify-content:space-between}
+
+/* board */
+.board{display:grid; grid-template-columns:repeat(5,1fr); gap:9px}
+.bcol{background:var(--surface-2); border:1px solid var(--line); border-radius:9px; padding:8px; min-width:0}
+.bhead{display:flex; align-items:baseline; justify-content:space-between; gap:6px; margin-bottom:8px}
+.bname{font-size:10.5px; font-weight:750; color:var(--ink); letter-spacing:-.005em}
+.bnum{font-family:var(--mono); font-size:15px; font-weight:700; color:var(--mint-ink); font-variant-numeric:tabular-nums}
+.bcol.last .bnum{color:var(--coral-ink)}
+.brule{height:2px; border-radius:2px; background:var(--mint); margin-bottom:8px; opacity:.9}
+.bcol:nth-child(2) .brule{width:86%}
+.bcol:nth-child(3) .brule{width:70%}
+.bcol:nth-child(4) .brule{width:56%}
+.bcol.last .brule{width:40%; background:var(--coral)}
+.ccard{background:var(--surface); border:1px solid var(--line); border-radius:7px; padding:7px 8px; margin-bottom:6px}
+.ccard .nm{font-weight:700; color:var(--ink); font-size:11px; line-height:1.3}
+.ccard .mt{color:var(--mut); font-size:10px; line-height:1.35}
+.tier{
+  display:inline-block; font-family:var(--mono); font-size:9px; font-weight:800;
+  width:14px; height:14px; line-height:13px; text-align:center; border-radius:4px;
+  border:1px solid var(--mint); color:var(--mint-ink); background:var(--mint-soft); margin-right:4px;
+}
+.tier.b{border-color:var(--tier-b); color:var(--tier-b-ink); background:var(--tier-b-soft)}
+.cmore{border:1px dashed var(--line-2); border-radius:7px; padding:5px 8px; color:var(--mut); font-size:10px; text-align:center; font-family:var(--mono)}
+.lane{
+  border:1px dashed var(--line-2); border-radius:8px; padding:7px 11px; color:var(--mut);
+  font-size:11px; display:flex; justify-content:space-between; gap:10px; align-items:center;
+}
+
+/* jelöltpanel */
+.panel{display:grid; grid-template-columns:1fr 300px; gap:10px}
+.tabs{display:flex; gap:2px; border-bottom:1px solid var(--line); margin:-2px 0 9px}
+.tab{padding:5px 11px; font-size:11px; font-weight:700; color:var(--mut); border-bottom:2px solid transparent}
+.tab.on{color:var(--ink); border-bottom-color:var(--coral)}
+
+/* tölcsér */
+.funnel{display:flex; align-items:center; gap:5px; flex-wrap:nowrap}
+.fseg{flex:1; display:flex; flex-direction:column; gap:4px; min-width:0}
+/* A sáv szélessége az arány, a magassága a keskenyedés — a JEL-jel motívuma. */
+.ftrack{height:11px; display:flex; align-items:center}
+.fbar{border-radius:5px; background:var(--mint)}
+.fseg:nth-child(1) .fbar{height:11px}
+.fseg:nth-child(2) .fbar{height:9px}
+.fseg:nth-child(3) .fbar{height:7px}
+.fseg:nth-child(4) .fbar{height:5px}
+.fnum{font-family:var(--mono); font-size:14px; font-weight:700; color:var(--ink); font-variant-numeric:tabular-nums}
+.flab{font-size:9.5px; color:var(--mut); letter-spacing:.02em; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+.fdot{width:15px; height:15px; border-radius:50%; background:var(--coral); flex:none; margin-left:3px}
+
+/* lépcső */
+.steps3{display:grid; grid-template-columns:1fr 1fr 1fr; gap:9px}
+.stepc{background:var(--surface); border:1px solid var(--line); border-radius:9px; padding:10px 12px}
+.stepc.done{border-color:var(--mint)}
+.stepc.lock{opacity:.62; border-style:dashed}
+.stepn{font-family:var(--mono); font-size:10px; font-weight:800; color:var(--coral-ink); letter-spacing:.1em}
+
+/* előtte/utána */
+.ba{display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-top:20px}
+@media (max-width:720px){.ba{grid-template-columns:1fr}}
+.bx{background:var(--surface); border:1px solid var(--line); border-radius:11px; padding:16px 18px}
+.bx.now{border-top:3px solid var(--coral)}
+.bx.next{border-top:3px solid var(--mint)}
+.bx h4{
+  margin:0 0 10px; font-family:var(--mono); font-size:11px; letter-spacing:.13em;
+  text-transform:uppercase; font-weight:700; color:var(--mut);
+}
+.bx ul{margin:0; padding-left:18px; font-size:14.5px}
+.bx li{margin-bottom:5px}
+.bx li::marker{color:var(--mut-2)}
+
+/* mozgatások */
+.move{
+  background:var(--surface); border:1px solid var(--line); border-radius:12px;
+  padding:22px 24px; margin-top:16px;
+}
+.move-k{
+  display:inline-flex; align-items:center; justify-content:center; width:26px; height:26px;
+  border-radius:7px; background:var(--k-bg); color:var(--k-ink); border:1px solid var(--k-bd); font-family:var(--mono);
+  font-weight:800; font-size:13px; margin-right:11px; flex:none;
+}
+.move-h{display:flex; align-items:center; margin-bottom:4px}
+.move-h span{font-size:19px; font-weight:750; color:var(--ink); letter-spacing:-.012em}
+.move p{font-size:15.5px}
+.move > p:last-child{margin-bottom:0}
+
+/* megtartva-lista */
+.keep{
+  display:grid; grid-template-columns:repeat(auto-fill,minmax(238px,1fr)); gap:8px; margin-top:18px;
+}
+.keep div{
+  background:var(--surface); border:1px solid var(--line); border-radius:8px;
+  padding:9px 12px; font-size:14px; display:flex; gap:9px; align-items:baseline;
+}
+.keep b{color:var(--mint-ink); font-family:var(--mono); font-size:12px; flex:none}
+
+/* ütemezés */
+.plan{border-collapse:collapse; width:100%; margin-top:18px; font-size:15px}
+.plan th{
+  text-align:left; font-family:var(--mono); font-size:10.5px; letter-spacing:.12em;
+  text-transform:uppercase; color:var(--mut); font-weight:700; padding:0 12px 8px 0;
+  border-bottom:1px solid var(--line-2);
+}
+.plan td{padding:12px 12px 12px 0; border-bottom:1px solid var(--line); vertical-align:top}
+.plan tr:last-child td{border-bottom:none}
+.plan .n{font-family:var(--mono); font-weight:800; color:var(--coral-ink); white-space:nowrap; width:1%}
+.plan .sz{font-family:var(--mono); font-size:13px; color:var(--mut); white-space:nowrap; width:1%}
+.plan b{color:var(--ink)}
+
+.note{
+  background:var(--surface-2); border:1px solid var(--line); border-left:3px solid var(--mint);
+  border-radius:9px; padding:14px 18px; margin-top:22px; font-size:15px; color:var(--ink-2);
+}
+.note p{margin:0; max-width:none}
+.note p + p{margin-top:9px}
+</style>
+
+<header class="mast">
+  <div class="mast-in">
+    <svg class="mark" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <g stroke-linecap="round" stroke-width="5.5" fill="none">
+        <path d="M8 11 L28 19.5" stroke="#FF5A5F"/>
+        <path d="M8 24 L26 24" stroke="#20CFA8"/>
+        <path d="M8 37 L28 28.5" stroke="#20CFA8"/>
+      </g>
+      <circle cx="37" cy="24" r="4.5" fill="#FF5A5F"/>
+    </svg>
+    <div>
+      <div class="eyebrow">JEL · munkafolyamat-terv</div>
+      <h1>Ugyanannyi lépés, egy irány</h1>
+      <p>A folyamat nem túl hosszú — csak nincs egy iránya. Ugyanaz a lista két képernyőn, egy jelölt két részletpanelen, négy különböző sorrend ugyanarra a munkára. Ez a terv nem vesz ki lépést: minden lépésnek egy helyet ad, és a felület egyetlen sorrendet tanít.</p>
+      <div class="who">alap: index.html · app.js (1843 sor) · 8 nézet · a jelenlegi demó képernyőképei</div>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <!-- ── 1. DIAGNÓZIS ── -->
+  <section>
+    <h2>1 · Diagnózis</h2>
+    <p class="lede">Nem a lépések száma a baj. Az, hogy nincs egy igazságforrás arról, hol tartasz.</p>
+
+    <ol class="finds">
+      <li class="find">
+        <span class="find-n">01</span>
+        <span class="find-h">Ugyanaz a lista két képernyőn</span>
+        <div class="find-b">
+          <p>A <b>Jelöltek</b> és a <b>Megkeresések</b> ugyanazokat az embereket sorolja fel, más-más állapotcímkékkel. Bogdán Ádám a Jelölteken „kiküldve · Következő: válaszra vár”, a Megkereséseken „vázlat kész · ellenőrizve · kiküldve”. Nem derül ki, melyik az igazi munkalista — és melyiket kell reggel megnyitni.</p>
+          <span class="src">app.js:1207 renderCandidatesView · app.js:1465 renderOutreachView</span>
+        </div>
+      </li>
+
+      <li class="find">
+        <span class="find-n">02</span>
+        <span class="find-h">Egy jelöltnek két részletpanele van, és az egyik elrabol</span>
+        <div class="find-b">
+          <p>A profil, az összegzés és a megközelítési terv az oldalsó panelen él. Az üzenet, a jóváhagyás, a kiküldés és a válasz egy másik nézet beágyazott szerkesztőjében. Ha a panelen az <b>Üzenetvázlat készítése</b> gombra kattintasz, a panel bezárul és átdob a Megkeresések nézetbe — elveszted a helyed a listában, és a többi nyitott szálat is.</p>
+          <span class="src">app.js:1434 closeDrawer(); showView("megkeresesek")</span>
+        </div>
+      </li>
+
+      <li class="find">
+        <span class="find-n">03</span>
+        <span class="find-h">Négy sorrend ugyanarra a folyamatra</span>
+        <div class="find-b">
+          <p>Az oldalsáv egy sorrendet mutat, a mérföldkövek egy másikat (az Ügyfél és interjú lépés bennük meg sem jelenik), a „Következő teendő” motor egy harmadikat, a jelöltenkénti „Következő:” felirat egy negyediket. Egyik sem tanítja meg a másikat, így egyiket sem lehet megjegyezni.</p>
+          <span class="src">index.html:29–36 · app.js:607 MILESTONES · app.js:333 nextStep · app.js:1195 candNext</span>
+        </div>
+      </li>
+
+      <li class="find">
+        <span class="find-n">04</span>
+        <span class="find-h">A haladásjelző 100%-ot mutat, miközben áll a munka</span>
+        <div class="find-b">
+          <p>A fejlécben <b>100% · 7/7 lépés</b>, közvetlenül alatta piros sávban: <b>„3 jelöltnél hiányzik a megközelítési terv vagy az üzenetvázlat”</b>. A mérföldkő azt méri, megtörtént-e valaha egyszer — a munka viszont jelöltenként zajlik. A százalék így nemcsak haszontalan, hanem félrevezet.</p>
+          <span class="src">app.js:612 „Megkeresések előkészítve” = Object.keys(p.outreach).length &gt; 0</span>
+        </div>
+      </li>
+
+      <li class="find">
+        <span class="find-n">05</span>
+        <span class="find-h">Egy menüpontban két, időben távoli munka</span>
+        <div class="find-b">
+          <p>Az <b>Ügyfél és interjú</b> nézet az ügyfél-egyeztetést (ami a brief után, a kutatás <em>előtt</em> kell) és az interjútervet (ami az első pozitív válasz <em>után</em>) fogja egybe. A folyamat közepén, mérföldkő nélkül, holott a kettő a folyamat két végén van.</p>
+          <span class="src">index.html:134–147</span>
+        </div>
+      </li>
+
+      <li class="find">
+        <span class="find-n">06</span>
+        <span class="find-h">A Célpiacon négy gomb egy sorban, függés nélkül</span>
+        <div class="find-b">
+          <p>„Keresési terv” / „Célpiac-térkép” / „Jelöltkutatás indítása” / „Új terv nulláról” egymás mellett — pedig valódi lánc van köztük, és a negyedik destruktív. Alatta öt kártya egymás alatt. A kizárási <em>szabályt</em> itt állítod, a <em>hatását</em> a Jelölteken látod.</p>
+          <span class="src">index.html:105–110 · app.js:861 renderCelpiac</span>
+        </div>
+      </li>
+
+      <li class="find">
+        <span class="find-n">07</span>
+        <span class="find-h">A kereső elviszi a navigációt, a jegyzet zsákutca</span>
+        <div class="find-b">
+          <p>A felső keresőbe gépelve a felület átvált a Jelöltek nézetre, bárhol is voltál. Fordítva pedig: ha jegyzetet írnál egy jelölthez, el kell hagynod a jelöltet, át kell menned a Jegyzetekbe, és legördülőből újra ki kell választanod a nevét.</p>
+          <span class="src">app.js:1822 · app.js:1686</span>
+        </div>
+      </li>
+    </ol>
+  </section>
+
+  <!-- ── 2. A GERINC ── -->
+  <section>
+    <h2>2 · A gerinc</h2>
+    <p class="lede">Három fázis, hét képernyő. Nyolc egyenrangú menüpont helyett.</p>
+    <p>A mai nyolc menüpont egy szinten áll, sorrend nélkül — így a felhasználónak kell fejben tartania, mi minek a feltétele. A javaslat ugyanazokat a képernyőket három fázisba rendezi, mert a munka valóban háromféle: <strong>egyszeri előkészítés</strong>, <strong>ismétlődő jelöltmunka</strong>, <strong>lezárás</strong>. A fázis nem díszítés: megmondja, mibe kell ma belenyúlni és mibe nem.</p>
+
+    <div class="ba">
+      <div class="bx now">
+        <h4>Most — 8 menüpont, egy szinten</h4>
+        <ul>
+          <li>Áttekintés</li>
+          <li>Pozíció és brief</li>
+          <li>Célpiac</li>
+          <li>Jelöltek</li>
+          <li>Megkeresések <em>— ugyanazok az emberek</em></li>
+          <li>Ügyfél és interjú <em>— két külön idejű munka</em></li>
+          <li>Eredmények</li>
+          <li>Jegyzetek <em>— zsákutca</em></li>
+        </ul>
+      </div>
+      <div class="bx next">
+        <h4>Javaslat — 3 fázis, 7 képernyő + napló</h4>
+        <ul>
+          <li>Áttekintés <em>— a nap indítója</em></li>
+          <li><strong>1 · Előkészítés:</strong> Brief és pozíció · Célpiac · Ügyfél-egyeztetés</li>
+          <li><strong>2 · Merítés és megkeresés:</strong> Jelöltek (tábla) · Interjúterv</li>
+          <li><strong>3 · Lezárás:</strong> Eredmények</li>
+          <li>Napló <em>— fiók minden képernyőn, nem menüpont</em></li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="figure">
+      <p class="figure-cap">Oldalsáv — a fázis mutatja, mi van kész és mennyi munka áll</p>
+      <div class="scrollx">
+        <div class="wf" style="min-width:640px">
+          <div class="wf-side" style="width:230px">
+            <div class="wf-brand">JEL</div>
+            <div class="wf-nav">Megbízások</div>
+            <div class="wf-lab">Staff Backend Eng. · Acme</div>
+            <div class="wf-nav">Áttekintés</div>
+            <div class="wf-lab"><span class="tick">✓</span> 1 · Előkészítés</div>
+            <div class="wf-nav sub">Brief és pozíció <span class="cnt">✓</span></div>
+            <div class="wf-nav sub">Célpiac <span class="cnt">✓</span></div>
+            <div class="wf-nav sub">Ügyfél-egyeztetés <span class="cnt">✓</span></div>
+            <div class="wf-lab">2 · Merítés és megkeresés</div>
+            <div class="wf-nav sub on">Jelöltek <span class="cnt">9/14</span></div>
+            <div class="wf-nav sub">Interjúterv <span class="cnt">2</span></div>
+            <div class="wf-lab">3 · Lezárás</div>
+            <div class="wf-nav sub">Eredmények</div>
+            <div style="margin-top:auto; padding-top:16px">
+              <div class="wf-nav">Napló megnyitása</div>
+            </div>
+          </div>
+          <div class="wf-main">
+            <div class="spread">
+              <div>
+                <div class="wf-h">Staff Backend Engineer</div>
+                <div class="wf-sub">Acme Payments · Budapest · hibrid · Felelős: Zita</div>
+              </div>
+              <div class="row"><span class="btn">Megkeresés folyamatban</span><span class="btn">Export</span></div>
+            </div>
+            <div class="card">
+              <div class="ct">A megbízás állása</div>
+              <div class="funnel">
+                <div class="fseg"><div class="fnum">14</div><div class="ftrack"><span class="fbar" style="width:100%"></span></div><div class="flab">felkutatva</div></div>
+                <div class="fseg"><div class="fnum">9</div><div class="ftrack"><span class="fbar" style="width:64%"></span></div><div class="flab">prioritásos</div></div>
+                <div class="fseg"><div class="fnum">5</div><div class="ftrack"><span class="fbar" style="width:36%"></span></div><div class="flab">megkeresve</div></div>
+                <div class="fseg"><div class="fnum">2</div><div class="ftrack"><span class="fbar" style="width:14%"></span></div><div class="flab">válaszolt</div></div>
+                <div class="fdot" title="döntési pont"></div>
+              </div>
+            </div>
+            <div class="card ghost" style="text-align:center; padding:22px">a fázis szerinti képernyő</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="note">
+      <p><strong>Semmi nem tűnik el.</strong> A Megkeresések nem lépés-összevonás: a benne lévő öt állapot (terv · vázlat · jóváhagyás · kiküldés · válasz) a Jelöltek táblán <em>oszlopként</em> jelenik meg, tehát láthatóbb lesz, nem kevesebb. Az ügyfél-egyeztetés és az interjúterv nem szűnik meg, csak arra a helyre kerül az idővonalon, ahol tényleg használod.</p>
+    </div>
+  </section>
+
+  <!-- ── 3. A NÉGY MOZGATÁS ── -->
+  <section>
+    <h2>3 · A négy mozgatás</h2>
+    <p class="lede">Négy változtatás oldja fel a hét leletből hatot.</p>
+
+    <!-- A -->
+    <div class="move">
+      <div class="move-h"><span class="move-k">A</span><span>A Jelöltek tábla lesz, és a Megkeresések az oszlopai</span></div>
+      <p>Egy lista, öt oszlop — az oszlopok maguk a lépések. A kártya ott mozdul, ahol a munka történik, és az oszlopszámok együtt kiadják a tölcsért. Ez váltja ki a <em>01</em> és <em>04</em> leletet: nincs több párhuzamos lista, és a haladás nem százalék, hanem emberek száma.</p>
+      <p>A C/D prioritású és a kizárt jelöltek nem oszlopok, hanem összecsukott sávok a tábla alján — megvannak, de nem terhelik a napi nézetet.</p>
+
+      <div class="figure">
+        <p class="figure-cap">Jelöltek — a tábla</p>
+        <div class="scrollx">
+          <div class="wf" style="min-width:900px">
+            <div class="wf-side">
+              <div class="wf-brand">JEL</div>
+              <div class="wf-nav">Megbízások</div>
+              <div class="wf-lab"><span class="tick">✓</span> 1 · Előkészítés</div>
+              <div class="wf-nav sub">Brief · Célpiac · Ügyfél</div>
+              <div class="wf-lab">2 · Merítés és megkeresés</div>
+              <div class="wf-nav sub on">Jelöltek <span class="cnt">9/14</span></div>
+              <div class="wf-nav sub">Interjúterv</div>
+              <div class="wf-lab">3 · Lezárás</div>
+              <div class="wf-nav sub">Eredmények</div>
+            </div>
+            <div class="wf-main">
+              <div class="spread">
+                <div><div class="wf-h">Jelöltek</div><div class="wf-sub">14 a merítésben · 3 kizárva · a prioritást bármikor felülírod</div></div>
+                <div class="row"><span class="btn">prioritás: mind</span><span class="btn">forrás: mind</span><span class="btn p">Prioritás frissítése</span></div>
+              </div>
+
+              <div class="board">
+                <div class="bcol">
+                  <div class="bhead"><span class="bname">Rangsorolatlan</span><span class="bnum">4</span></div>
+                  <div class="brule"></div>
+                  <div class="ccard"><div class="nm">Ionescu Andrei</div><div class="mt">román e-commerce</div><div class="row" style="margin-top:5px"><span class="chip r">új</span></div></div>
+                  <div class="ccard"><div class="nm">Wójcik Marek</div><div class="mt">infra startup</div><div class="row" style="margin-top:5px"><span class="chip">2 erős jel</span></div></div>
+                  <div class="cmore">+2</div>
+                </div>
+                <div class="bcol">
+                  <div class="bhead"><span class="bname">Előkészítés</span><span class="bnum">3</span></div>
+                  <div class="brule"></div>
+                  <div class="ccard"><div class="nm"><span class="tier b">B</span>Kovács Bence</div><div class="mt">SaaS scale-up</div><div class="row" style="margin-top:5px"><span class="chip w">terv kell</span></div></div>
+                  <div class="ccard"><div class="nm"><span class="tier b">B</span>Varga Eszter</div><div class="mt">energetikai adatcég</div><div class="row" style="margin-top:5px"><span class="chip w">vázlat kell</span></div></div>
+                  <div class="cmore">+1</div>
+                </div>
+                <div class="bcol">
+                  <div class="bhead"><span class="bname">Jóváhagyásra</span><span class="bnum">2</span></div>
+                  <div class="brule"></div>
+                  <div class="ccard"><div class="nm"><span class="tier b">B</span>Horák Tomáš</div><div class="mt">cseh ipari OEM</div><div class="row" style="margin-top:5px"><span class="chip">vázlat kész</span></div></div>
+                  <div class="cmore">+1</div>
+                </div>
+                <div class="bcol">
+                  <div class="bhead"><span class="bname">Kiküldve</span><span class="bnum">3</span></div>
+                  <div class="brule"></div>
+                  <div class="ccard"><div class="nm"><span class="tier">A</span>Bogdán Ádám</div><div class="mt">régiós fintech</div><div class="row" style="margin-top:5px"><span class="chip g">kiküldve</span><span class="chip w">11n</span></div></div>
+                  <div class="cmore">+2</div>
+                </div>
+                <div class="bcol last">
+                  <div class="bhead"><span class="bname">Válaszolt</span><span class="bnum">2</span></div>
+                  <div class="brule"></div>
+                  <div class="ccard"><div class="nm"><span class="tier">A</span>Nowak Katarzyna</div><div class="mt">lengyel unicorn</div><div class="row" style="margin-top:5px"><span class="chip g">pozitív</span></div></div>
+                  <div class="cmore">+1</div>
+                </div>
+              </div>
+
+              <div class="lane"><span>Figyelőlista — C és D prioritás</span><span class="chip">4</span></div>
+              <div class="lane"><span>Kizárva a merítésből — ügyfél saját emberei, off-limits cégek</span><span class="chip r">3</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- B -->
+    <div class="move">
+      <div class="move-h"><span class="move-k">B</span><span>Egy jelölt = egy panel, négy füllel</span></div>
+      <p>A profil, a megközelítési terv, az üzenet és a jegyzetek egy panelre kerülnek: <code>Profil · Megközelítés · Üzenet · Napló</code>. Az „Üzenetvázlat készítése” a helyén dolgozik és az Üzenet fülre visz — nem zárja be a panelt, és nem visz át másik képernyőre. Bezáráskor oda kerülsz vissza, ahonnan nyitottad, ugyanabba az oszlopba. Ez oldja fel a <em>02</em> és a <em>07</em> lelet jegyzet-felét.</p>
+
+      <div class="figure">
+        <p class="figure-cap">Jelöltpanel — az Üzenet fül, a tábla fölött</p>
+        <div class="scrollx">
+          <div class="wf" style="min-width:760px">
+            <div class="wf-main" style="background:var(--paper)">
+              <div class="panel">
+                <div class="card" style="padding:0; overflow:hidden">
+                  <div style="padding:11px 13px 0">
+                    <div class="spread">
+                      <div><div class="wf-h" style="font-size:14px">Horák Tomáš</div><div class="wf-sub">Engineering Manager — embedded / IoT · cseh ipari OEM</div></div>
+                      <span class="btn">Bezárás ✕</span>
+                    </div>
+                    <div class="tabs">
+                      <span class="tab">Profil</span>
+                      <span class="tab">Megközelítés</span>
+                      <span class="tab on">Üzenet</span>
+                      <span class="tab">Napló</span>
+                    </div>
+                  </div>
+                  <div style="padding:0 13px 13px; display:flex; flex-direction:column; gap:8px">
+                    <div class="card"><div class="ct">Tárgy</div><div style="color:var(--ink)">Payments core, skálázás — pár szó a csapatról</div></div>
+                    <div class="card" style="min-height:82px"><div class="ct">Üzenet — szabadon szerkeszthető</div><div style="color:var(--mut)">Szia Tomáš, …</div></div>
+                    <div class="row">
+                      <span class="btn p">Jóváhagyva ✓</span>
+                      <span class="btn">Másolás</span>
+                      <span class="btn">Kiküldés rögzítése</span>
+                      <span class="btn">GDPR Art. 14</span>
+                    </div>
+                    <div class="wf-sub">A rendszer nem küld üzenetet — a saját csatornádon küldöd, itt csak az állapotát rögzíted.</div>
+                  </div>
+                </div>
+                <div style="display:flex; flex-direction:column; gap:8px">
+                  <div class="card mint">
+                    <div class="ct" style="color:var(--mint-ink)">Állapot</div>
+                    <div class="row"><span class="chip g">B prioritás</span><span class="chip">vázlat kész</span></div>
+                    <div class="wf-sub" style="margin-top:6px">Következő: vázlat ellenőrzése</div>
+                  </div>
+                  <div class="card">
+                    <div class="ct">Amit tudunk — forrással</div>
+                    <div class="wf-sub">3 erős jel · forrás ↗ · Art. 14: rendezve</div>
+                  </div>
+                  <div class="card">
+                    <div class="ct">Gyors jegyzet</div>
+                    <div class="wf-sub">…ide írsz, és a Naplóba kerül</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- C -->
+    <div class="move">
+      <div class="move-h"><span class="move-k">C</span><span>Az ügyfél-egyeztetés és az interjúterv az idővonalra kerül</span></div>
+      <p>Az <strong>Ügyfél-egyeztetés</strong> az 1. fázis harmadik lépése lesz: a véglegesített brief után, a kutatás előtt — ott, ahol a tisztázandó pontok még számítanak. Az <strong>Interjúterv</strong> a 2. fázis végére kerül, és az első pozitív válasz oldja fel; addig látszik a menüben, de elmagyarázza, mire vár. A két munka így nem egy képernyőn versenyez, hanem a saját idejében jelenik meg. Ez oldja fel az <em>05</em> leletet.</p>
+      <div class="figure">
+        <p class="figure-cap">Az idővonal — ahol a két AI-lépés valóban dolgozik</p>
+        <div class="scrollx">
+          <div class="steps3" style="min-width:640px">
+            <div class="stepc done">
+              <div class="stepn">1 · ELŐKÉSZÍTÉS</div>
+              <div style="font-weight:750; color:var(--ink); margin:5px 0 4px">Brief → Ügyfél-egyeztetés → Célpiac</div>
+              <div class="wf-sub">Az egyeztetési javaslatok a briefből épülnek, és a kutatás előtt módosíthatják a feltételeket.</div>
+            </div>
+            <div class="stepc done">
+              <div class="stepn">2 · MERÍTÉS</div>
+              <div style="font-weight:750; color:var(--ink); margin:5px 0 4px">Jelöltek tábla → Interjúterv</div>
+              <div class="wf-sub">Az interjútervet az első pozitív válasz oldja fel — addig a menüpont elmagyarázza, mire vár.</div>
+            </div>
+            <div class="stepc lock">
+              <div class="stepn">3 · LEZÁRÁS</div>
+              <div style="font-weight:750; color:var(--ink); margin:5px 0 4px">Eredmények</div>
+              <div class="wf-sub">Csak mérés. A „Shortlist kész” gomb innen a tábla fejlécébe költözik — ott munkalépés.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- D -->
+    <div class="move">
+      <div class="move-h"><span class="move-k">D</span><span>A Célpiac három lépcsőre bomlik, a kizárás mellé kerül a hatása</span></div>
+      <p>A négy egyenrangú gomb helyett három számozott lépcső, valódi függéssel: a térkép a terv után, a kutatás a térkép után élesedik. A destruktív „Új terv nulláról” a kártya <code>⋯</code> menüjébe kerül. A kizárási szabályok jobb oldali sávba mennek, közvetlenül a hatásukkal együtt („3 jelölt kiszűrve” — kattintható), így a szabály és a következménye egy képernyőn van. Ez oldja fel a <em>06</em> leletet.</p>
+
+      <div class="figure">
+        <p class="figure-cap">Célpiac — vezetett lépcső, jobb oldalt a kizárás</p>
+        <div class="scrollx">
+          <div class="wf" style="min-width:840px">
+            <div class="wf-side">
+              <div class="wf-brand">JEL</div>
+              <div class="wf-lab">1 · Előkészítés</div>
+              <div class="wf-nav sub">Brief és pozíció <span class="cnt">✓</span></div>
+              <div class="wf-nav sub on">Célpiac</div>
+              <div class="wf-nav sub">Ügyfél-egyeztetés</div>
+              <div class="wf-lab">2 · Merítés és megkeresés</div>
+              <div class="wf-nav sub">Jelöltek</div>
+            </div>
+            <div class="wf-main">
+              <div><div class="wf-h">Célpiac</div><div class="wf-sub">Hol dolgoznak a szerephez illő emberek, és milyen kereséssel találod meg őket.</div></div>
+              <div class="steps3">
+                <div class="stepc done">
+                  <div class="stepn">① TERV</div>
+                  <div style="font-weight:700; color:var(--ink); margin:4px 0 6px; font-size:13px">Keresési terv</div>
+                  <div class="row"><span class="chip">Staff Engineer ✕</span><span class="chip">Tech Lead ✕</span><span class="chip">+</span></div>
+                  <div class="row" style="margin-top:7px"><span class="btn">Frissítés</span><span class="btn">⋯</span></div>
+                </div>
+                <div class="stepc done">
+                  <div class="stepn">② TÉRKÉP</div>
+                  <div style="font-weight:700; color:var(--ink); margin:4px 0 6px; font-size:13px">Célpiac-térkép</div>
+                  <div class="wf-sub">4 célcég · 3 klaszter</div>
+                  <div class="row" style="margin-top:7px"><span class="btn">Frissítés</span></div>
+                </div>
+                <div class="stepc">
+                  <div class="stepn">③ KUTATÁS</div>
+                  <div style="font-weight:700; color:var(--ink); margin:4px 0 6px; font-size:13px">Jelöltkutatás</div>
+                  <div class="wf-sub">forrás: mintaadatok</div>
+                  <div class="row" style="margin-top:7px"><span class="btn p">Indítás</span></div>
+                </div>
+              </div>
+              <div class="panel">
+                <div class="card">
+                  <div class="ct">Stratégia-asszisztens — csak a tervet és a térképet szerkeszti</div>
+                  <div class="wf-sub">Minden módosítás tételes és visszavonható. A rendszer-prompt látható.</div>
+                </div>
+                <div class="card hi">
+                  <div class="ct">Kizárás a merítésből</div>
+                  <div class="row"><span class="chip r">3 jelölt kiszűrve</span></div>
+                  <div class="wf-sub" style="margin-top:6px">2 az ügyfélnél dolgozik · 1 volt munkatárs</div>
+                  <div class="row" style="margin-top:7px"><span class="btn">Megnézem a táblán</span></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── 4. ÁTTEKINTÉS ── -->
+  <section>
+    <h2>4 · Áttekintés</h2>
+    <p class="lede">Hat widget helyett három blokk — és amit lehet, itt helyben elintézel.</p>
+    <p>A mai Áttekintésen hat, egymással nem beszélő elem van: következő teendő, mérföldkősáv, briefkivonat, elakadt jelöltek, lefedettség és egy módszertani chat. A javaslat háromra szűkíti, és a legfontosabb változás nem a szám: a <strong>Következő teendő</strong> alatt megjelenik az a 2–3 konkrét sor, amin egy kattintással dolgozni tudsz — anélkül, hogy elhagynád a képernyőt. Ma minden ilyen gomb elnavigál.</p>
+    <p>A mérföldkősáv kikerül (a tölcsér a fejlécben már megmondja, hol tartasz), a módszertani chat pedig a Naplóba költözik, ahol a többi kontextus is van.</p>
+
+    <div class="figure">
+      <p class="figure-cap">Áttekintés — a nap indítója</p>
+      <div class="scrollx">
+        <div class="wf" style="min-width:840px">
+          <div class="wf-side">
+            <div class="wf-brand">JEL</div>
+            <div class="wf-nav">Megbízások</div>
+            <div class="wf-lab">Staff Backend Eng. · Acme</div>
+            <div class="wf-nav on">Áttekintés</div>
+            <div class="wf-lab"><span class="tick">✓</span> 1 · Előkészítés</div>
+            <div class="wf-nav sub">Brief · Célpiac · Ügyfél</div>
+            <div class="wf-lab">2 · Merítés és megkeresés</div>
+            <div class="wf-nav sub">Jelöltek <span class="cnt">9/14</span></div>
+          </div>
+          <div class="wf-main">
+            <div class="card">
+              <div class="ct">A megbízás állása</div>
+              <div class="funnel">
+                <div class="fseg"><div class="fnum">14</div><div class="ftrack"><span class="fbar" style="width:100%"></span></div><div class="flab">felkutatva</div></div>
+                <div class="fseg"><div class="fnum">9</div><div class="ftrack"><span class="fbar" style="width:64%"></span></div><div class="flab">prioritásos</div></div>
+                <div class="fseg"><div class="fnum">5</div><div class="ftrack"><span class="fbar" style="width:36%"></span></div><div class="flab">megkeresve</div></div>
+                <div class="fseg"><div class="fnum">2</div><div class="ftrack"><span class="fbar" style="width:14%"></span></div><div class="flab">válaszolt</div></div>
+                <div class="fdot"></div>
+              </div>
+            </div>
+
+            <div class="card hi">
+              <div class="ct" style="color:var(--coral-ink)">Következő teendő</div>
+              <div style="font-weight:800; color:var(--ink); font-size:14px">3 jelöltnél hiányzik a megközelítési terv vagy az üzenetvázlat</div>
+              <div class="wf-sub" style="margin-bottom:8px">Innen is elintézhető — a panel a képernyő fölött nyílik.</div>
+              <div style="display:flex; flex-direction:column; gap:5px">
+                <div class="spread" style="border-top:1px solid var(--line); padding-top:6px">
+                  <span><span class="tier b">B</span><b style="color:var(--ink)">Varga Eszter</b> <span class="wf-sub">— hiányzik az üzenetvázlat</span></span>
+                  <span class="btn p">Vázlat</span>
+                </div>
+                <div class="spread" style="border-top:1px solid var(--line); padding-top:6px">
+                  <span><span class="tier b">B</span><b style="color:var(--ink)">Kovács Bence</b> <span class="wf-sub">— hiányzik a megközelítési terv</span></span>
+                  <span class="btn p">Terv</span>
+                </div>
+                <div class="spread" style="border-top:1px solid var(--line); padding-top:6px">
+                  <span><span class="tier">A</span><b style="color:var(--ink)">Bogdán Ádám</b> <span class="wf-sub">— 11 napja nincs lépés</span></span>
+                  <span class="btn">Utánkövetés</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="panel">
+              <div class="card">
+                <div class="ct">Véglegesített brief</div>
+                <div class="wf-sub">Nem „senior Java fejlesztőt” keresnek — hanem valakit, aki egy skálázódó payments core-t stabilan tud tartani növekvő terhelés alatt…</div>
+                <div class="row" style="margin-top:7px"><span class="btn">Megnyitás</span><span class="chip g">véglegesítve</span></div>
+              </div>
+              <div class="card" style="border-color:var(--coral)">
+                <div class="ct" style="color:var(--coral-ink)">Keresési lefedettség · figyelem</div>
+                <div class="wf-sub">A jelöltek 100%-a egy forrásból jön. Bővítsd a kutatást más forrással, mielőtt a listából következtetsz.</div>
+                <div class="row" style="margin-top:7px"><span class="btn">Célpiac</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── 5. A JEL-MOTÍVUM ── -->
+  <section>
+    <h2>5 · Egy vizuális ötlet</h2>
+    <p class="lede">A logó maga a tölcsér — használjuk annak.</p>
+    <p>A JEL-jel három beérkező vonal, ami egy korall pontba fut: sok jelből egy döntés. A mai fejléc-progress már ezt a motívumot rajzolja, csak hamis adatra van kötve — hét mérföldkőre, amiből 100% lesz akkor is, ha áll a munka.</p>
+    <p>A javaslat ugyanazt a formát valódi számokra köti: <strong>négy keskenyedő menta sáv fut a korall pontba</strong> — felkutatva → prioritásos → megkeresve → válaszolt. A márkajel és a termék egyetlen fontos száma ugyanaz az objektum lesz. A tábla oszlopai fölött ugyanez a keskenyedés ismétlődik egy hajszálvonalban, halkan. Ennyi a vizuális kockázat — minden más marad a mostani, fegyelmezett nyelvnél: mélykék oldalsáv, meleg törtfehér tartalom, menta akció, korall döntési pont.</p>
+    <p>Amit ehhez érdemes hozzátenni: <strong>a számok kapjanak saját betűtípust</strong> (tabuláris, monospace-jellegű) — a tölcsérben, az oszlopfejlécekben, a napszámoknál és az Eredményeken. Egy termékben, ami azt ígéri, hogy „kitalált számot nem mutatunk”, az adat megérdemli a saját hangját.</p>
+  </section>
+
+  <!-- ── 6. MI MARAD ── -->
+  <section>
+    <h2>6 · Mit nem veszünk ki</h2>
+    <p class="lede">Minden lépés, minden gomb, minden AI-hívás megmarad.</p>
+    <p>Az átrendezés nem funkciócsökkentés. Ezek mind a helyükön maradnak, csak más csoportban:</p>
+    <div class="keep">
+      <div><b>→</b> Brief elemzése és véglegesítése</div>
+      <div><b>→</b> Kizárási szabályok és felülbírálásuk</div>
+      <div><b>→</b> Keresési terv, kézi szerkesztéssel</div>
+      <div><b>→</b> Célpiac-térkép</div>
+      <div><b>→</b> Stratégia-asszisztens, visszavonással</div>
+      <div><b>→</b> Jelöltkutatás, forrásválasztással</div>
+      <div><b>→</b> Prioritási javaslat és felülbírálás</div>
+      <div><b>→</b> Profil-összegzés evidenciákkal</div>
+      <div><b>→</b> Megközelítési terv</div>
+      <div><b>→</b> Üzenetvázlat, jóváhagyás, kiküldés</div>
+      <div><b>→</b> Válaszrögzítés hangulattal</div>
+      <div><b>→</b> GDPR Art. 14 értesítő</div>
+      <div><b>→</b> Ügyfél-egyeztetési javaslatok</div>
+      <div><b>→</b> Interjúterv</div>
+      <div><b>→</b> Eredmények és kiinduló érték</div>
+      <div><b>→</b> Jegyzetek, export, státusz</div>
+    </div>
+  </section>
+
+  <!-- ── 7. ÜTEMEZÉS ── -->
+  <section>
+    <h2>7 · Milyen sorrendben</h2>
+    <p class="lede">Négy lépés, elöl a legnagyobb megkönnyebbüléssel.</p>
+    <p>A sorrend szándékosan a legkisebb diffel kezd: az 1. lépés önmagában megszünteti a legidegesítőbb ugrálást, és nem függ a többitől.</p>
+
+    <table class="plan">
+      <thead>
+        <tr><th></th><th>Lépés</th><th>Mit old meg</th><th>Méret</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="n">1</td>
+          <td><b>Egy jelölt, egy panel</b><br><span class="wf-sub">Füles panel; a vázlatkészítés nem navigál el. A kereső sem — a találat a panelt nyitja.</span></td>
+          <td>02 · 07</td>
+          <td class="sz">~½ nap</td>
+        </tr>
+        <tr>
+          <td class="n">2</td>
+          <td><b>A Jelöltek tábla, a Megkeresések oszlopként</b><br><span class="wf-sub">Öt oszlop, két összecsukott sáv. A Megkeresések menüpont megszűnik, a tartalma nem.</span></td>
+          <td>01 · 04</td>
+          <td class="sz">~1 nap</td>
+        </tr>
+        <tr>
+          <td class="n">3</td>
+          <td><b>Három fázis a navigációban</b><br><span class="wf-sub">Ügyfél-egyeztetés az 1. fázisba, Interjúterv a 2. végére, Jegyzetek fiókká.</span></td>
+          <td>03 · 05</td>
+          <td class="sz">~½ nap</td>
+        </tr>
+        <tr>
+          <td class="n">4</td>
+          <td><b>Tölcsér a százalék helyett, Célpiac-lépcső, Áttekintés-tisztítás</b><br><span class="wf-sub">A mérföldkövek kikerülnek; a haladás emberek száma lesz.</span></td>
+          <td>04 · 06</td>
+          <td class="sz">~1 nap</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="note">
+      <p><strong>Ami nem fér bele, és nem is kellene:</strong> a fenti nem nyúl a szerveroldali sémához. A tábla oszlopai a meglévő <code>orState()</code> és <code>effTier()</code> állapotokból számolhatók, a tölcsér a meglévő <code>candidates</code> / <code>ranking</code> / <code>outreach_status</code> mezőkből. Adatmigráció nem kell.</p>
+      <p><strong>Amit érdemes megnézni, mielőtt nekiállunk:</strong> valóban a tábla-e a jó forma, vagy egy csoportosított lista elég. A tábla akkor nyer, ha egy megbízáson jellemzően 10–40 jelölt van; 100 fölött a csoportosított lista jobban skálázik. Ez a demó 14-gyel dolgozik, tehát a tábla a jó tipp — de érdemes a valós számokon ellenőrizni.</p>
+    </div>
+  </section>
+
+</div>
+
+</body>
+</html>
