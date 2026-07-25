@@ -197,6 +197,65 @@ body.no-scroll{overflow:hidden}
 .sr-sub{font-size:11.5px;color:var(--mut);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .sr-next{font-size:11px;color:var(--mut);white-space:nowrap}
 .sr-empty{padding:12px;font-size:12.5px;color:var(--mut)}
+
+/* ── JELÖLTTÁBLA ──────────────────────────────────────────────────────────
+   Vízszintes görgetés pattintással, nem rács: így keskeny képernyőn ugyanez
+   a kód működik, csak szűkebb oszlopokkal. A fejléc-vonal a JEL-motívum —
+   balról jobbra keskenyedik, ahogy a tölcsér.                             */
+.viewtog{display:inline-flex;gap:4px;padding:3px;background:#F1EEE6;border-radius:9px}
+.viewtog .filter-pill{border:none;background:transparent}
+.viewtog .filter-pill.active{background:#fff;box-shadow:0 1px 2px rgba(23,34,56,.08)}
+.board{display:flex;gap:10px;overflow-x:auto;scroll-snap-type:x proximity;padding:4px 2px 10px;margin-top:10px}
+/* Széles képernyőn mind az öt oszlop kifér és kitölti a helyet; szűkülve
+   előbb összehúzódnak, majd vízszintesen görgethetők. */
+.bcol{flex:1 1 210px;min-width:198px;scroll-snap-align:start;background:var(--bg);
+  border:1px solid var(--line);border-radius:11px;padding:9px;display:flex;flex-direction:column;min-width:0}
+.bcol-head{display:flex;align-items:baseline;justify-content:space-between;gap:8px}
+.bcol-name{font-size:12px;font-weight:750;color:var(--ink);letter-spacing:-.005em}
+.bcol-num{font-size:16px;font-weight:800;color:var(--accent-ink);font-variant-numeric:tabular-nums;line-height:1}
+.bcol:last-child .bcol-num{color:var(--coral-ink)}
+.bcol-rule{height:2px;border-radius:2px;background:var(--accent);margin:7px 0 9px;opacity:.9;width:100%}
+.bcol:nth-child(2) .bcol-rule{width:84%}
+.bcol:nth-child(3) .bcol-rule{width:68%}
+.bcol:nth-child(4) .bcol-rule{width:52%}
+.bcol:last-child .bcol-rule{width:38%;background:var(--coral)}
+.bcol-body{display:flex;flex-direction:column;gap:7px;min-width:0}
+.bcol-empty{border:1px dashed var(--line-2);border-radius:8px;padding:12px 10px;font-size:11.5px;color:var(--mut-2);text-align:center}
+.bcard{background:#fff;border:1px solid var(--line);border-left:3px solid var(--line-2);border-radius:9px;
+  padding:9px 10px;cursor:pointer;display:flex;flex-direction:column;gap:3px;min-width:0;transition:box-shadow .12s,border-color .12s}
+.bcard:hover,.bcard:focus-visible{box-shadow:var(--shadow);border-color:var(--line-2)}
+.bcard.tier-A{border-left-color:var(--tier-a)}
+.bcard.tier-B{border-left-color:var(--tier-b)}
+.bcard.tier-C{border-left-color:var(--tier-c)}
+.bcard.tier-D,.bcard.tier-none{border-left-color:var(--line-2)}
+.bcard-top{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.bcard-prio{padding:1px 4px;font-size:11px}
+.bcard-ov{font-size:9.5px;color:var(--mut-2);text-transform:uppercase;letter-spacing:.05em}
+.bcard-name{font-size:13px;font-weight:750;color:var(--ink);line-height:1.25}
+.bcard-meta{font-size:11px;color:var(--ink-3);line-height:1.35;overflow-wrap:anywhere}
+.bcard-meta.dim{color:var(--mut)}
+.bcard-chips{display:flex;flex-wrap:wrap;gap:4px;margin-top:2px}
+.bcard-chips .chip{font-size:10px;padding:2px 7px}
+.bcard-next{font-size:10.5px;color:var(--mut);margin-top:2px}
+
+/* Listanézet: ugyanaz az öt csoport egymás alatt */
+.clist{margin-top:10px;display:flex;flex-direction:column;gap:10px}
+.lgroup{background:#fff;border:1px solid var(--line);border-radius:11px;padding:10px 12px}
+.lgroup>summary{cursor:pointer;display:flex;align-items:center;gap:10px;font-size:13px;color:var(--ink);list-style:none}
+.lgroup>summary::-webkit-details-marker{display:none}
+.lgroup>summary::before{content:"▸";color:var(--mut-2);font-size:11px;transition:transform .15s}
+.lgroup[open]>summary::before{transform:rotate(90deg)}
+.lgroup-name{font-weight:750}
+.lgroup-num{margin-left:auto;font-variant-numeric:tabular-nums;font-weight:800;color:var(--accent-ink)}
+.lgroup-body{margin-top:9px}
+
+/* Összecsukott sávok a tábla alatt */
+.lane{margin-top:14px;background:#fff;border:1px solid var(--line);border-radius:11px;padding:10px 14px}
+.lane>summary{cursor:pointer;display:flex;align-items:center;gap:10px;font-size:12.5px;color:var(--ink-3)}
+.lane-num{margin-left:auto;font-variant-numeric:tabular-nums;font-weight:800;color:var(--mut)}
+.lane-body{margin-top:10px}
+@media (prefers-reduced-motion: reduce){.board{scroll-behavior:auto}.lgroup>summary::before{transition:none}.bcard{transition:none}}
+@media (max-width:1100px){.bcol{flex:0 0 min(74vw,260px)}}
 .klist{margin:6px 0 0;padding-left:18px}
 .klist li{margin-bottom:5px}
 .flag{background:var(--coral-soft);border-left:3px solid var(--coral);padding:8px 12px;border-radius:0 8px 8px 0;margin-bottom:6px;font-size:13px}
