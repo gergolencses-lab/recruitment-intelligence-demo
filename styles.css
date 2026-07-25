@@ -273,6 +273,56 @@ body.no-scroll{overflow:hidden}
 .side-notes:hover{background:rgba(255,255,255,.12);color:#fff}
 #notesBody .d-sec h5{display:flex;align-items:center;gap:8px}
 #notesBody select{font-family:inherit}
+
+/* ── TÖLCSÉR: a JEL-jel motívuma valódi számokra ── */
+.funnel-wrap{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.funnel{display:flex;align-items:center;gap:6px;flex:1;min-width:280px}
+.fseg{flex:1;display:flex;flex-direction:column;gap:3px;min-width:0}
+.fnum{font-size:17px;font-weight:800;color:var(--ink);font-variant-numeric:tabular-nums;line-height:1}
+.ftrack{height:11px;display:flex;align-items:center}
+.fbar{border-radius:5px;background:linear-gradient(90deg,var(--accent),var(--accent-bright))}
+.fseg:nth-child(1) .fbar{height:11px}
+.fseg:nth-child(2) .fbar{height:9px}
+.fseg:nth-child(3) .fbar{height:7px}
+.fseg:nth-child(4) .fbar{height:5px}
+.flab{font-size:10.5px;color:var(--mut);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.fdot{width:14px;height:14px;border-radius:50%;background:var(--coral);flex:none}
+.fdot.full{box-shadow:0 0 0 4px var(--coral-soft)}
+.funnel-excl{font-size:11.5px;color:var(--mut)}
+.ov-lead{display:flex;flex-direction:column;gap:14px}
+.next-inline{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;
+  border-left:4px solid var(--coral);background:#FFF7F6;border-radius:10px;padding:12px 14px}
+.todo-list{display:flex;flex-direction:column;gap:1px}
+.todo-row{display:flex;align-items:center;gap:10px;padding:8px 2px;border-top:1px solid var(--divider)}
+.todo-name{font-weight:700;color:var(--ink);font-size:13px}
+.todo-need{color:var(--mut);font-size:12.5px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.todo-cta{flex:none}
+.pg-mini{display:flex;align-items:center;gap:8px}
+.ph-dots{display:flex;gap:4px}
+.ph-dot{width:22px;height:5px;border-radius:3px;background:var(--line-2)}
+.ph-dot.on{background:var(--accent)}
+.pg-mini .v{font-size:11.5px;color:var(--mut);font-variant-numeric:tabular-nums}
+
+/* ── CÉLPIAC-LÉPCSŐ ── */
+.steps3{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:12px 0 4px}
+.stepc{background:#fff;border:1px solid var(--line);border-radius:11px;padding:12px 14px;display:flex;flex-direction:column;gap:4px}
+.stepc.done{border-color:var(--accent)}
+.stepc.cur{border-color:var(--coral);box-shadow:var(--shadow)}
+.stepc.lock{opacity:.6}
+.stepn{font-size:10px;font-weight:800;letter-spacing:.1em;color:var(--coral-ink)}
+.stepc.done .stepn{color:var(--accent-ink)}
+.stepc-h{font-size:14px;font-weight:750;color:var(--ink)}
+.stepc .kpi-desc{margin:0 0 4px}
+.stepc .row{margin-top:auto;margin-bottom:0}
+.stepmenu{position:relative}
+.stepmenu>summary{list-style:none;cursor:pointer;padding:8px 10px;border:1px solid var(--line-2);border-radius:8px;color:var(--mut);font-size:13px}
+.stepmenu>summary::-webkit-details-marker{display:none}
+.stepmenu[open]>summary{background:#F1EEE6}
+.stepmenu .btn{position:absolute;right:0;top:calc(100% + 4px);z-index:5;white-space:nowrap;background:#fff;border:1px solid var(--line-2);box-shadow:var(--shadow)}
+.cel-grid{display:grid;grid-template-columns:1fr 320px;gap:16px;margin-top:6px;align-items:start}
+.cel-main{min-width:0}
+.cel-side{position:sticky;top:0}
+@media (max-width:1100px){.steps3{grid-template-columns:1fr}.cel-grid{grid-template-columns:1fr}.cel-side{position:static}}
 .klist{margin:6px 0 0;padding-left:18px}
 .klist li{margin-bottom:5px}
 .flag{background:var(--coral-soft);border-left:3px solid var(--coral);padding:8px 12px;border-radius:0 8px 8px 0;margin-bottom:6px;font-size:13px}
