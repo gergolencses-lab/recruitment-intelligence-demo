@@ -47,9 +47,12 @@
     <!-- ── MAIN ── -->
     <main class="main">
       <header class="topbar">
-        <div class="search-pill">
-          <input id="globalSearch" placeholder="Jelölt keresése…" autocomplete="off" />
-          <span class="kbd">⌘ F</span>
+        <div class="search-wrap">
+          <div class="search-pill">
+            <input id="globalSearch" placeholder="Jelölt keresése…" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="searchResults" />
+            <span class="kbd">⌘ F</span>
+          </div>
+          <div id="searchResults" class="search-results hidden" role="listbox" aria-label="Találatok"></div>
         </div>
         <div class="top-right">
           <div class="badges" id="badgesTop"></div>
@@ -156,9 +159,17 @@
     </main>
   </div>
 
-  <!-- Jelölt részletes nézet (oldalsó panel) -->
-  <div id="candDrawer" class="drawer drawer-wide hidden">
-    <div class="drawer-head"><h3 id="candDrawerTitle">Jelölt</h3><button id="candDrawerClose" class="btn btn-ghost">✕</button></div>
+  <!-- Jelöltpanel: egy jelölt minden adata egy helyen, fülekre bontva -->
+  <div id="scrim" class="scrim hidden"></div>
+  <div id="candDrawer" class="drawer drawer-wide hidden" role="dialog" aria-modal="true" aria-labelledby="candDrawerTitle">
+    <div class="drawer-head">
+      <div class="drawer-head-txt">
+        <h3 id="candDrawerTitle">Jelölt</h3>
+        <div id="candDrawerSub" class="crow-head"></div>
+      </div>
+      <button id="candDrawerClose" class="btn btn-ghost" aria-label="Panel bezárása" title="Bezárás (Esc)">✕</button>
+    </div>
+    <div id="candTabs" class="tabs" role="tablist"></div>
     <div id="candDrawerBody" class="drawer-body"></div>
   </div>
 

@@ -7,8 +7,8 @@ const state = {
   projectId: null, project: null, status: null,
   view: "home", homeFilter: "aktiv",
   candFilter: { prio: "", state: "", q: "" },
-  orOpen: null,        // megkeresés-szerkesztőben nyitott jelölt
-  drawerId: null,      // jelölt-részletpanelben nyitott jelölt
+  drawerId: null,      // a jelöltpanelben nyitott jelölt
+  panelTab: "profil",  // profil · megkozelites · uzenet · naplo
   newEngStep: 0,       // 0 = zárva, 1 = alapadatok, 2 = brief
   openExcluded: false, // a kizárt jelöltek sávja nyitva nyíljon-e
 };
@@ -502,7 +502,7 @@ function openEngagement(id, view) {
   if (!p) { toast("A megbízás nem található ebben a böngészőben."); return; }
   state.projectId = id;
   state.project = p;
-  state.orOpen = null;
+  state.panelTab = "profil";
   closeDrawer();
   showView(view || "attekintes");
 }
@@ -1401,17 +1401,66 @@ function renderCandidatesView(p) {
 }
 
 // ── JELÖLT RÉSZLETES NÉZET (oldalsó panel) ──────────────────────────────
-function openDrawer(id) {
+const PANEL_TABS = [["profil", "Profil"], ["megkozelites", "Megközelítés"], ["uzenet", "Üzenet"], ["naplo", "Napló"]];
+function openPanel(id, tab) {
   const p = state.project; if (!p) return;
   const c = candById(p, id); if (!c) return;
+  const wasOpen = !!state.drawerId;
   state.drawerId = id;
+  state.panelTab = PANEL_TABS.some(([k]) => k === tab) ? tab : "profil";
   if (c.is_new) { c.is_new = false; persist(); }
+  closeSearchResults();
   $("#candDrawer").classList.remove("hidden");
+  $("#scrim").classList.remove("hidden");
+  document.body.classList.add("no-scroll");
+  // A telefonos vissza-gomb a panelt zárja, ne a megbízást hagyja el.
+  if (!wasOpen) { try { history.pushState({ jelPanel: id }, ""); } catch (e) {} }
+  renderDrawer(p, c);
+  const h = $("#candDrawerTitle"); if (h) h.focus();
+}
+function closeDrawer(fromPop) {
+  if (!state.drawerId) return;
+  state.drawerId = null;
+  $("#candDrawer").classList.add("hidden");
+  $("#scrim").classList.add("hidden");
+  document.body.classList.remove("no-scroll");
+  if (!fromPop && history.state && history.state.jelPanel) { try { history.back(); } catch (e) {} }
+}
+// A régi név megmarad, hogy a hívási helyek egy helyen legyenek átvezethetők.
+function openDrawer(id) { openPanel(id); }
+function setPanelTab(tab) {
+  const p = state.project; if (!p || !state.drawerId) return;
+  const c = candById(p, state.drawerId); if (!c) return;
+  // Fülváltás nem veszíthet el begépelt szöveget.
+  if (state.panelTab === "uzenet") syncMessageDraft(p, state.drawerId);
+  state.panelTab = tab;
   renderDrawer(p, c);
 }
-function closeDrawer() { state.drawerId = null; $("#candDrawer").classList.add("hidden"); }
+// Jelölt-idővonal: nem tárolunk külön eseménynaplót — a meglévő mezőkből áll össze.
+function candTimeline(p, c) {
+  const s = (p.outreach_status || {})[c.id] || {};
+  const ev = [];
+  if (s.reviewed_at) ev.push({ ts: s.reviewed_at, kind: "esemeny", note: "Üzenetvázlat jóváhagyva" });
+  if (s.sent_at) ev.push({ ts: s.sent_at, kind: "esemeny", note: "Megkeresés kiküldve" });
+  if (s.replied_at) ev.push({ ts: s.replied_at, kind: "esemeny", note: "Válasz érkezett — " + sentiLabel(s.sentiment) });
+  (p.memory || []).forEach((m) => { if (m.candidate_id === c.id) ev.push(m); });
+  ev.sort((a, b) => String(b.ts || "").localeCompare(String(a.ts || "")));
+  return ev;
+}
+const NOTE_KIND_LABEL = { esemeny: "esemény", candidate: "jelölt", note: "megbízás" };
+function renderNoteList(entries, opts) {
+  opts = opts || {};
+  if (!entries.length) return `<div class="ov-empty sm">${esc(opts.empty || "Még nincs bejegyzés.")}</div>`;
+  return entries.map((e) => {
+    const kind = NOTE_KIND_LABEL[e.kind] || NOTE_KIND_LABEL.note;
+    const who = opts.candidateName && e.candidate_id ? `<b>${esc(opts.candidateName(e.candidate_id))}</b> — ` : "";
+    return `<div class="note-row"><span class="note-kind${e.kind === "esemeny" ? " ev" : ""}">${esc(kind)}</span>
+      <div class="note-body">${who}${esc(e.note)}<div class="note-ts">${esc(String(e.ts || "").slice(0, 16).replace("T", " "))}</div></div></div>`;
+  }).join("");
+}
 function renderDrawer(p, c) {
   $("#candDrawerTitle").textContent = c.name || c.id;
+  $("#candDrawerSub").textContent = [c.headline, c.current_company].filter(Boolean).join(" · ");
   const a = (p.assessments || {})[c.id];
   const at = (p.attraction || {})[c.id];
   const o = (p.outreach || {})[c.id];
@@ -1420,11 +1469,21 @@ function renderDrawer(p, c) {
   const body = $("#candDrawerBody");
   const exc = exclusionFor(p, c);
   const man = (p.exclusions.candidates || {})[c.id];
-  body.innerHTML = `
-    ${exc ? `<div class="excl-banner d"><div><b>${esc(exc.label)}</b><div class="crow-meta">${esc(exc.detail || "")}</div></div>
+  const tab = state.panelTab || "profil";
+
+  const badge = { uzenet: o ? (s.sent ? "✓" : "•") : "", naplo: candTimeline(p, c).length || "" };
+  $("#candTabs").innerHTML = PANEL_TABS.map(([k, lbl]) =>
+    `<button class="tab${tab === k ? " on" : ""}" role="tab" aria-selected="${tab === k}" data-tab="${k}">${esc(lbl)}${badge[k] ? `<span class="tab-b">${esc(String(badge[k]))}</span>` : ""}</button>`).join("");
+
+  const banner = exc
+    ? `<div class="excl-banner d"><div><b>${esc(exc.label)}</b><div class="crow-meta">${esc(exc.detail || "")}</div></div>
       <button class="btn" id="dExInclude">Mégis bevonom</button></div>`
-      : man && man.state === "include" ? `<div class="excl-banner ok d"><div><b>Kizárás felülbírálva</b><div class="crow-meta">A recruiter szándékosan bevonta a merítésbe.</div></div>
-      <button class="btn btn-ghost" id="dExRevert">Vissza a kizártakhoz</button></div>` : ""}
+    : man && man.state === "include"
+      ? `<div class="excl-banner ok d"><div><b>Kizárás felülbírálva</b><div class="crow-meta">A recruiter szándékosan bevonta a merítésbe.</div></div>
+      <button class="btn btn-ghost" id="dExRevert">Vissza a kizártakhoz</button></div>` : "";
+
+  const panes = {
+    profil: `
     <div class="d-sec"><h5>Profil</h5>
       <div class="crow-name">${esc(c.name)}</div>
       <div class="crow-head">${esc(c.headline || "")}</div>
@@ -1449,19 +1508,47 @@ function renderDrawer(p, c) {
         ${F.qclarify(a).length ? `<h5 style="margin-top:8px">A beszélgetésen tisztázandó</h5>${list(F.qclarify(a))}` : ""}
         ${(a.unknowns || []).length ? `<h5 style="margin-top:8px">Amit nem tudunk</h5>${a.unknowns.map((u) => `<div class="flag">? ${esc(u)}</div>`).join("")}` : ""}`
       : `<button class="btn" id="dAssess">Profil összegzése</button>`}
-    </div>
+    </div>`,
+
+    megkozelites: `
     <div class="d-sec"><h5>Megközelítési terv ${at ? demoTag(at) : ""}</h5>
-      ${at ? renderAttractInner(at) : `<button class="btn btn-primary" id="dAttract">Megközelítési terv készítése</button>`}
+      ${at ? renderAttractInner(at) : `<p class="kpi-desc" style="margin-top:0">Mit érdemes mondani ennek az embernek, és miért — a jeleiből visszavezetve.</p><button class="btn btn-primary" id="dAttract">Megközelítési terv készítése</button>`}
     </div>
-    <div class="d-sec"><h5>Üzenetvázlat</h5>
-      ${o ? `<p class="mut" style="font-size:12px">${esc(shorten(o.subject || o.body || "", 90))}</p><button class="btn" id="dToOutreach">Megnyitás a Megkeresésekben</button>`
-        : at ? `<button class="btn" id="dDraft">Üzenetvázlat készítése</button>` : `<span class="mut" style="font-size:12px">Üzenetvázlathoz előbb készíts megközelítési tervet.</span>`}
-    </div>
+    ${at ? `<div class="d-sec"><h5>Következő lépés</h5>
+      ${o ? `<p class="mut" style="font-size:12.5px">Az üzenetvázlat elkészült.</p><button class="btn" id="dGoMsg">Üzenet megnyitása</button>`
+          : `<button class="btn btn-primary" id="dDraft">Üzenetvázlat készítése</button>`}</div>` : ""}`,
+
+    uzenet: `<div id="orEditor"></div>`,
+
+    naplo: `
     <div class="d-sec"><h5>Aktivitás</h5>
       <div class="crow-meta">Utolsó lépés: ${relTime(c.last_touched)}${s.sent ? " · kiküldve" : ""}${s.replied ? " · " + esc(sentiLabel(s.sentiment)) : ""}</div>
       <div class="row" style="margin-top:8px"><button class="btn" id="dTouch">Aktivitás rögzítése</button>
         ${!exc ? `<button class="btn btn-ghost" id="dExExclude" title="Kivétel a merítésből">Kizárom a merítésből</button>` : ""}</div>
-    </div>`;
+    </div>
+    <div class="d-sec"><h5>Jegyzet hozzáadása</h5>
+      <div class="row"><input id="dNoteIn" class="brief-line" placeholder="Mit érdemes tudni erről a jelöltről?" />
+        <button class="btn btn-primary" id="dNoteSave">Mentés</button></div>
+    </div>
+    <div class="d-sec"><h5>Előzmény</h5>
+      ${renderNoteList(candTimeline(p, c), { empty: "Még nincs esemény és jegyzet ennél a jelöltnél." })}
+    </div>`,
+  };
+  body.innerHTML = banner + (panes[tab] || panes.profil);
+
+  $$("#candTabs .tab").forEach((b) => (b.onclick = () => setPanelTab(b.dataset.tab)));
+  if (tab === "uzenet") renderMessageTab(p, c.id, $("#orEditor"));
+  const dGo = $("#dGoMsg"); if (dGo) dGo.onclick = () => setPanelTab("uzenet");
+  const nSave = $("#dNoteSave");
+  if (nSave) nSave.onclick = () => {
+    const note = $("#dNoteIn").value.trim();
+    if (!note) return;
+    p.memory = p.memory || [];
+    p.memory.push({ ts: new Date().toISOString(), kind: "candidate", candidate_id: c.id, note });
+    persist();
+    renderDrawer(p, c);
+    toast("Jegyzet mentve.");
+  };
   const dInc = $("#dExInclude");
   if (dInc) dInc.onclick = () => { setCandExclusion(p, c.id, "include", "A recruiter szándékosan bevonta."); renderDrawer(p, c); render(state.view); toast("Jelölt bevonva a merítésbe."); };
   const dRev = $("#dExRevert");
@@ -1477,7 +1564,8 @@ function renderDrawer(p, c) {
     render(state.view);
     toast("Jelölt kizárva a merítésből — a kizártak közt megtalálod.");
   };
-  $("#dPrio").onchange = (e) => {
+  const dPr = $("#dPrio");
+  if (dPr) dPr.onchange = (e) => {
     if (e.target.value) p.priority_overrides[c.id] = e.target.value;
     else delete p.priority_overrides[c.id];
     persist();
@@ -1509,13 +1597,12 @@ function renderDrawer(p, c) {
     p.outreach[c.id] = out;
     c.last_touched = new Date().toISOString();
     persist();
-    state.orOpen = c.id;
-    closeDrawer();
-    showView("megkeresesek");
+    // A vázlat ott készül el, ahol dolgozol: a panel nyitva marad, csak fület vált.
+    setPanelTab("uzenet");
+    if (state.view === "jeloltek" || state.view === "megkeresesek") render(state.view);
   });
-  const dTo = $("#dToOutreach");
-  if (dTo) dTo.onclick = () => { state.orOpen = c.id; closeDrawer(); showView("megkeresesek"); };
-  $("#dTouch").onclick = () => touchCand(c.id).then(() => renderDrawer(p, c));
+  const dT = $("#dTouch");
+  if (dT) dT.onclick = () => touchCand(c.id).then(() => renderDrawer(p, c));
 }
 function renderAttractInner(o) {
   const gr = o.grounded_read || {};
@@ -1570,17 +1657,16 @@ function renderOutreachView(p) {
         <div><div class="crow-name">${esc(r.cand.name)}</div><div class="crow-head">${esc(r.cand.current_company || "")}</div></div>
         <div class="crow-meta">${esc(((p.outreach || {})[r.id] || {}).channel || shorten(((p.attraction || {})[r.id] || {}).channel || "", 40) || "—")}</div>
         <div class="or-states">${st.join("")}</div>
-        <button class="btn ${state.orOpen === r.id ? "btn-primary" : ""}" data-id="${esc(r.id)}">${r.hasDraft ? "Megnyitás" : "Vázlat készítése"}</button>
+        <button class="btn ${state.drawerId === r.id ? "btn-primary" : ""}" data-id="${esc(r.id)}">${r.hasDraft ? "Megnyitás" : "Vázlat készítése"}</button>
       </div>`;
     }).join("")}</div>
-    <div id="orEditor"></div>
   </div>`;
+  // A sor nem szerkesztő, hanem mutató: a szerkesztés a jelöltpanelen történik.
   $$("#orRows button").forEach((b) => (b.onclick = (e) => {
     const id = b.dataset.id;
-    if ((p.outreach || {})[id]) { state.orOpen = id; renderOutreachView(p); }
+    if ((p.outreach || {})[id]) openPanel(id, "uzenet");
     else makeDraft(p, id, e.target);
   }));
-  if (state.orOpen && (p.outreach || {})[state.orOpen]) renderOrEditor(p, state.orOpen);
 }
 async function makeDraft(p, id, btn) {
   return withLoading(btn, async () => {
@@ -1594,17 +1680,30 @@ async function makeDraft(p, id, btn) {
     p.outreach[id] = out;
     const cd = candById(p, id); if (cd) cd.last_touched = new Date().toISOString();
     persist();
-    state.orOpen = id;
-    renderOutreachView(p);
+    openPanel(id, "uzenet");
   });
 }
-function renderOrEditor(p, id) {
-  const o = p.outreach[id];
+// Az üzenet fül tartalma. Ugyanaz a szerkesztő, mint korábban — csak ott van,
+// ahol a jelölt többi adata is.
+function renderMessageTab(p, id, box) {
+  if (!box) return;
+  const o = (p.outreach || {})[id];
   const c = candById(p, id) || {};
   const s = orState(p, id);
-  const box = $("#orEditor");
-  box.innerHTML = `<div class="or-editor">
-    <div class="ck-sec-head"><h3>Üzenetvázlat — ${esc(c.name || id)} ${demoTag(o)} ${aiTag(s.reviewed || s.sent)}</h3>
+  const at = (p.attraction || {})[id];
+  if (!o) {
+    box.innerHTML = `<div class="d-sec"><h5>Üzenetvázlat</h5>
+      <p class="kpi-desc" style="margin-top:0">${at
+        ? "A megközelítési terv megvan — ebből készül a vázlat, amit te ellenőrzöl és a saját csatornádon küldesz ki."
+        : "Vázlat előtt megközelítési terv kell: abból tudja az elemzés, mit érdemes mondani ennek az embernek."}</p>
+      <button class="btn btn-primary" id="msgMake">${at ? "Üzenetvázlat készítése" : "Megközelítési terv és vázlat készítése"}</button>
+    </div>`;
+    const mk = $("#msgMake");
+    if (mk) mk.onclick = (e) => makeDraft(p, id, e.target);
+    return;
+  }
+  box.innerHTML = `<div class="or-editor in-panel">
+    <div class="ck-sec-head"><h3>Üzenetvázlat ${demoTag(o)} ${aiTag(s.reviewed || s.sent)}</h3>
       <span class="ck-sec-note">${esc(o.channel || "")}${o.language ? " · " + esc(o.language) : ""}</span></div>
     <input class="subj" id="orSubj" value="${esc(o.subject || "")}" placeholder="Tárgy" />
     <textarea class="body" id="orBody">${esc(o.body || "")}</textarea>
@@ -1619,24 +1718,23 @@ function renderOrEditor(p, id) {
         <button class="ck-mini bad" data-s="negatív">negatív</button>` : ""}
       ${s.sent ? `<button class="btn btn-ghost" id="orReset" title="állapot visszavonása">↺</button>` : ""}
       <button class="btn btn-ghost" id="orArt14">GDPR Art. 14 értesítő</button>
-      <button class="btn btn-ghost" id="orClose">Bezárás</button>
     </div>
     <div id="art14Slot"></div>
     <div class="note">A kiküldés a te csatornádon történik (e-mail, LinkedIn) — itt csak az állapotát rögzíted.</div>
   </div>`;
-  const save = () => {
-    o.subject = $("#orSubj").value;
-    o.body = $("#orBody").value;
-    o.edited_by_recruiter = true;
-    persist();
+  // Újrarender után a háttérben lévő listát is frissítjük, de a panel marad.
+  const refresh = () => {
+    const c2 = candById(p, id);
+    if (c2 && state.drawerId === id) renderDrawer(p, c2);
+    if (state.view === "jeloltek" || state.view === "megkeresesek" || state.view === "attekintes") render(state.view);
   };
-  $("#orSubj").onchange = save;
-  $("#orBody").onchange = save;
+  $("#orSubj").onchange = () => syncMessageDraft(p, id);
+  $("#orBody").onchange = () => syncMessageDraft(p, id);
   const ap = $("#orApprove");
   if (ap) ap.onclick = async () => {
-    save();
+    syncMessageDraft(p, id);
     await setOrStatus(p, id, { status: "reviewed" });
-    renderOutreachView(p);
+    refresh();
     toast("Vázlat jóváhagyva.");
   };
   $("#orCopy").onclick = () => {
@@ -1645,22 +1743,32 @@ function renderOrEditor(p, id) {
   };
   const sb = $("#orSent");
   if (sb) sb.onclick = async () => {
-    save();
+    syncMessageDraft(p, id);
     await setOrStatus(p, id, { status: "sent" });
-    renderOutreachView(p);
+    refresh();
     toast("Kiküldés rögzítve.");
   };
-  $$("#orEditor .ck-mini").forEach((b) => (b.onclick = async () => {
+  $$(".ck-mini", box).forEach((b) => (b.onclick = async () => {
     await setOrStatus(p, id, { sentiment: b.dataset.s });
-    renderOutreachView(p);
+    refresh();
   }));
   const rs = $("#orReset");
-  if (rs) rs.onclick = async () => { await setOrStatus(p, id, { status: "reset" }); renderOutreachView(p); };
+  if (rs) rs.onclick = async () => { await setOrStatus(p, id, { status: "reset" }); refresh(); };
   $("#orArt14").onclick = (e) => withLoading(e.target, async () => {
     const a = await api("POST", `/api/project/${p.id}/art14`, { candidateId: id });
     $("#art14Slot").innerHTML = `<div class="mail" style="margin-top:10px"><div class="mail-head"><span class="mail-subj">${esc(a.subject)}</span><span>${esc(a.must_send_within)}</span></div><div class="mail-body">${esc(a.body)}</div></div><div class="note">${esc(a.note)}</div>`;
   });
-  $("#orClose").onclick = () => { state.orOpen = null; renderOutreachView(p); };
+}
+// A szerkesztőmező tartalma `change`-re (fókuszvesztéskor) mentődik. Fülváltásnál
+// és újrarendernél ez nem mindig ér oda — ezért minden ilyen előtt kézzel mentünk.
+function syncMessageDraft(p, id) {
+  const subj = $("#orSubj"), body = $("#orBody");
+  const o = (p.outreach || {})[id];
+  if (!o || (!subj && !body)) return;
+  if (subj) o.subject = subj.value;
+  if (body) o.body = body.value;
+  o.edited_by_recruiter = true;
+  persist();
 }
 async function setOrStatus(p, id, body) {
   try {
@@ -1890,23 +1998,76 @@ $("#interviewBtn").onclick = (e) => needEngagement() && withLoading(e.target, as
 // ── GLOBÁLIS ────────────────────────────────────────────────────────────
 $("#newEngBtn").onclick = () => { if (state.view !== "home") closeEngagement(); openNewEngForm(); };
 $("#candDrawerClose").onclick = () => closeDrawer();
+$("#scrim").onclick = () => closeDrawer();
+window.addEventListener("popstate", () => { if (state.drawerId) closeDrawer(true); });
 $$(".step").forEach((s) => (s.onclick = (e) => {
   e.preventDefault();
   const v = s.dataset.view;
   if (v === "home") { closeEngagement(); return; }
   showView(v);
 }));
+
+/* ── GLOBÁLIS KERESŐ ─────────────────────────────────────────────────────
+   A gépelés nem visz el sehova. A Jelöltek nézetben helyben szűr, máshol
+   találati listát nyit, és a találat a jelöltpanelt nyitja meg — a nézet
+   marad, ahol voltál.                                                    */
+function closeSearchResults() {
+  const box = $("#searchResults");
+  if (!box) return;
+  box.classList.add("hidden");
+  box.innerHTML = "";
+  const inp = $("#globalSearch");
+  if (inp) inp.setAttribute("aria-expanded", "false");
+}
+function renderSearchResults(q) {
+  const box = $("#searchResults");
+  if (!box) return;
+  if (!q || !state.project) return closeSearchResults();
+  const p = state.project;
+  const hits = (p.candidates || []).filter((x) =>
+    `${x.name} ${x.headline} ${x.current_company} ${x.location}`.toLowerCase().includes(q)).slice(0, 8);
+  box.innerHTML = hits.length
+    ? hits.map((x) => {
+        const t = effTier(p, x.id);
+        return `<button class="sr-row" role="option" data-id="${esc(x.id)}">
+          <span class="sr-tier">${esc(t || "—")}</span>
+          <span class="sr-main"><b>${esc(x.name)}</b><span class="sr-sub">${esc([x.headline, x.current_company].filter(Boolean).join(" · "))}</span></span>
+          <span class="sr-next">${esc(candNext(p, x))}</span>
+        </button>`;
+      }).join("")
+    : `<div class="sr-empty">Nincs találat erre: „${esc(q)}”</div>`;
+  box.classList.remove("hidden");
+  $("#globalSearch").setAttribute("aria-expanded", "true");
+  $$(".sr-row", box).forEach((b) => (b.onclick = () => openPanel(b.dataset.id)));
+}
 $("#globalSearch").oninput = (e) => {
-  state.candFilter.q = e.target.value.trim().toLowerCase();
-  if (state.project && state.view !== "jeloltek") showView("jeloltek");
-  else if (state.project) renderCandidatesView(state.project);
+  const q = e.target.value.trim().toLowerCase();
+  state.candFilter.q = q;
+  if (!state.project) return;
+  if (state.view === "jeloltek") { closeSearchResults(); renderCandidatesView(state.project); }
+  else renderSearchResults(q);
 };
+document.addEventListener("click", (e) => {
+  if (!e.target.closest(".search-wrap")) closeSearchResults();
+});
 document.addEventListener("keydown", (e) => {
   if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "f" && state.project) {
     e.preventDefault();
     $("#globalSearch").focus();
   }
-  if (e.key === "Escape") closeDrawer();
+  if (e.key === "Escape") {
+    if (!$("#searchResults").classList.contains("hidden")) closeSearchResults();
+    else closeDrawer();
+  }
+  // Fókuszcsapda: nyitott panelből a Tab ne szökjön ki a háttérbe.
+  if (e.key === "Tab" && state.drawerId) {
+    const f = $$('a[href],button:not([disabled]),input:not([disabled]),select,textarea,[tabindex]:not([tabindex="-1"])', $("#candDrawer"))
+      .filter((n) => n.offsetParent !== null);
+    if (!f.length) return;
+    const first = f[0], last = f[f.length - 1];
+    if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+    else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+  }
 });
 
 // Init — a visszatérő felhasználót a legutóbbi állapothoz visszük.
