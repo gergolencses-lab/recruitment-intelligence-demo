@@ -11,6 +11,7 @@ const state = {
   drawerId: null,      // a jelöltpanelben nyitott jelölt
   panelTab: "profil",  // profil · megkozelites · uzenet · naplo
   notesOpen: false,    // a napló-fiók nyitva van-e
+  moreOpen: false,     // az alsó „⋯ Több” lap nyitva van-e
   newEngStep: 0,       // 0 = zárva, 1 = alapadatok, 2 = brief
   openExcluded: false, // a kizárt jelöltek sávja nyitva nyíljon-e
 };
@@ -505,6 +506,8 @@ function showView(v) {
     renderEngNav(state.project);
   }
   $$("[data-view]").forEach((s) => s.classList.toggle("active", s.dataset.view === v));
+  renderSubNav();
+  renderBotNav();
   render(v);
   saveUi();
 }
@@ -527,6 +530,88 @@ function phaseState(p, key) {
   }
   const sent = Object.values(p.outreach_status || {}).some((s) => s && s.sent_at);
   return { done: p.status === "Betöltve" || p.status === "Lezárva", note: sent ? "" : "" };
+}
+const BOT_SLOTS = [
+  { key: "attekintes", label: "Áttekintés", icon: "◎", view: "attekintes" },
+  { key: "elokeszites", label: "Felkészülés", icon: "◔", phase: "elokeszites" },
+  { key: "jeloltek", label: "Jelöltek", icon: "▦", view: "jeloltek" },
+  { key: "lezaras", label: "Eredmény", icon: "◆", phase: "lezaras" },
+  { key: "more", label: "Több", icon: "⋯" },
+];
+function phaseOf(view) {
+  const f = PHASES.find((x) => x.views.some(([v]) => v === view));
+  return f ? f.key : null;
+}
+function renderBotNav() {
+  const nav = $("#botNav");
+  if (!nav) return;
+  // A nyitóképernyőn nincs megbízás-navigáció — ugyanaz a szabály, mint az oldalsávban.
+  nav.classList.toggle("hidden", !state.project || state.view === "home");
+  if (!state.project) return;
+  const cur = state.view === "jeloltek" ? "jeloltek" : (phaseOf(state.view) || state.view);
+  nav.innerHTML = BOT_SLOTS.map((s) => {
+    const on = s.key === "more" ? state.moreOpen
+      : s.key === "jeloltek" ? state.view === "jeloltek"
+      : s.view ? state.view === s.view : (cur === s.phase && state.view !== "jeloltek");
+    return `<button class="botnav-b${on ? " on" : ""}" data-bot="${s.key}" aria-current="${on ? "page" : "false"}">
+      <span class="botnav-i" aria-hidden="true">${s.icon}</span><span class="botnav-l">${esc(s.label)}</span></button>`;
+  }).join("");
+  $$(".botnav-b", nav).forEach((b) => (b.onclick = () => {
+    const slot = BOT_SLOTS.find((s) => s.key === b.dataset.bot);
+    if (slot.key === "more") return toggleMoreSheet();
+    closeMoreSheet();
+    if (slot.view) return showView(slot.view);
+    const f = PHASES.find((x) => x.key === slot.phase);
+    if (f) showView(f.views[0][0]);
+  }));
+}
+// A fázison belüli lépések: keskeny képernyőn ez váltja ki az oldalsávot.
+function renderSubNav() {
+  const box = $("#subNav");
+  if (!box) return;
+  const fk = phaseOf(state.view);
+  const f = PHASES.find((x) => x.key === fk);
+  const show = !!state.project && !!f && f.views.length > 1 && state.view !== "jeloltek";
+  box.classList.toggle("hidden", !show);
+  if (!show) { box.innerHTML = ""; return; }
+  const gate = !hasPositiveReply(state.project);
+  box.innerHTML = `<span class="subnav-lbl">${esc(f.label)}</span>` + f.views.map(([v, lbl]) =>
+    `<button class="subnav-b${v === state.view ? " on" : ""}${v === "interju" && gate ? " locked" : ""}" data-view="${v}" role="tab" aria-selected="${v === state.view}">${esc(lbl)}</button>`).join("");
+}
+function toggleMoreSheet() { state.moreOpen ? closeMoreSheet() : openMoreSheet(); }
+function closeMoreSheet() {
+  if (!state.moreOpen) return;
+  state.moreOpen = false;
+  $("#moreSheet").classList.add("hidden");
+  syncScrim();
+  renderBotNav();
+}
+function openMoreSheet() {
+  if (!state.project) return;
+  closeDrawer(); closeNotesDrawer();
+  state.moreOpen = true;
+  const p = state.project;
+  $("#moreBody").innerHTML = `
+    <button class="sheet-row" id="msNotes"><b>Napló</b><span>Jegyzetek és módszertani segítség</span></button>
+    <button class="sheet-row" data-view="ugyfel"><b>Ügyfél-egyeztetés</b><span>Felkészülés a hiring managerrel</span></button>
+    <button class="sheet-row" data-view="interju"><b>Interjúterv</b><span>Kompetencia-alapú kérdések</span></button>
+    <div class="sheet-sec">
+      <label class="cov-label">Státusz</label>
+      <select id="msStatus">${STATUSES.map((s) => `<option ${p.status === s ? "selected" : ""}>${s}</option>`).join("")}</select>
+    </div>
+    <div class="sheet-row-inline">
+      <button class="btn" id="msExport">Export</button>
+      <button class="btn btn-ghost" id="msBack">← Megbízások</button>
+    </div>
+    <div class="sheet-foot">${$("#badges").innerHTML}<div class="mut" style="margin-top:6px">${esc(($("#modelLine") || {}).textContent || "")}</div></div>`;
+  $("#moreSheet").classList.remove("hidden");
+  syncScrim();
+  renderBotNav();
+  $("#msNotes").onclick = () => { closeMoreSheet(); openNotesDrawer(); };
+  $$("#moreBody [data-view]").forEach((b) => (b.onclick = () => { closeMoreSheet(); showView(b.dataset.view); }));
+  $("#msStatus").onchange = (e) => { p.status = e.target.value; persist(); render(state.view); toast("Státusz frissítve."); };
+  $("#msExport").onclick = () => { closeMoreSheet(); const b = $("#exportBtn"); if (b) b.click(); };
+  $("#msBack").onclick = () => { closeMoreSheet(); closeEngagement(); };
 }
 function renderEngNav(p) {
   const box = $("#engSteps");
@@ -1364,6 +1449,11 @@ const BOARD_COLS = [
   ["kikuldve", "Kiküldve", "Válaszra vár"],
   ["valaszolt", "Válaszolt", "Innen megy tovább interjúra"],
 ];
+// Keskeny képernyőn a vízszintes tábla nem használható: a felhasználó
+// beállítása megmarad, de a tényleges elrendezés lista lesz.
+const NARROW = "(max-width: 900px)";
+function isNarrow() { return typeof matchMedia === "function" && matchMedia(NARROW).matches; }
+function effectiveCandView() { return isNarrow() ? "list" : (state.candView === "list" ? "list" : "board"); }
 const strongCount = (x) => (x.signals || []).filter((s) => s.strength === "erős").length;
 
 // A szűrők mindkét elrendezésre ugyanúgy hatnak. Az „állapot” szűrő csak
@@ -1427,7 +1517,7 @@ function renderCandidatesView(p) {
     return;
   }
   const f = state.candFilter;
-  const isBoard = state.candView !== "list";
+  const isBoard = effectiveCandView() === "board";
   const act = activeCandidates(p), exc = excludedCandidates(p);
   const shown = act.filter((x) => candMatches(p, x, f, !isBoard));
 
@@ -1466,10 +1556,10 @@ function renderCandidatesView(p) {
       <p class="stage-sub">${act.length} jelölt a merítésben${exc.length ? ` · ${exc.length} kizárva` : ""} · a prioritás a lista tulajdonsága — az AI-javaslatot bármikor felülírhatod.</p></div>
     ${exc.length ? `<div class="excl-banner"><span><b>${exc.length} jelölt nem került a listára.</b> Az ügyfél jelenlegi vagy volt munkatársai, illetve off-limits cégnél dolgozók — őket a hiring manager ismeri.</span><button class="btn" id="candExShow">Megnézem</button></div>` : ""}
     <div class="cand-toolbar">
-      <div class="viewtog" role="group" aria-label="Elrendezés">
+      ${isNarrow() ? "" : `<div class="viewtog" role="group" aria-label="Elrendezés">
         <button class="filter-pill${isBoard ? " active" : ""}" data-cv="board" aria-pressed="${isBoard}">Tábla</button>
         <button class="filter-pill${isBoard ? "" : " active"}" data-cv="list" aria-pressed="${!isBoard}">Lista</button>
-      </div>
+      </div>`}
       ${p.ranking ? `<button class="btn" id="rankBtn">Prioritási javaslat frissítése</button>` : ""}
       <select id="fPrio" aria-label="Prioritás szűrő"><option value="">prioritás: mind</option>${["A", "B", "C", "D"].map((k) => `<option value="${k}" ${f.prio === k ? "selected" : ""}>${k}</option>`).join("")}<option value="none" ${f.prio === "none" ? "selected" : ""}>nincs prioritás</option></select>
       ${isBoard ? "" : `<select id="fState" aria-label="Állapot szűrő"><option value="">állapot: mind</option><option value="new" ${f.state === "new" ? "selected" : ""}>új</option><option value="noplan" ${f.state === "noplan" ? "selected" : ""}>nincs terv</option><option value="nodraft" ${f.state === "nodraft" ? "selected" : ""}>nincs vázlat</option><option value="sent" ${f.state === "sent" ? "selected" : ""}>kiküldve</option><option value="replied" ${f.state === "replied" ? "selected" : ""}>válaszolt</option></select>`}
@@ -1562,7 +1652,7 @@ function renderCandidatesView(p) {
 // ── JELÖLT RÉSZLETES NÉZET (oldalsó panel) ──────────────────────────────
 /* Két oldalsó fiók van: a jelöltpanel és a napló. Egyszerre csak az egyik
    lehet nyitva — a sötétítés és a görgetés-zár közös. */
-function anyDrawerOpen() { return !!state.drawerId || state.notesOpen; }
+function anyDrawerOpen() { return !!state.drawerId || state.notesOpen || state.moreOpen; }
 function syncScrim() {
   const on = anyDrawerOpen();
   $("#scrim").classList.toggle("hidden", !on);
@@ -2168,7 +2258,7 @@ $("#interviewBtn").onclick = (e) => needEngagement() && withLoading(e.target, as
 // ── GLOBÁLIS ────────────────────────────────────────────────────────────
 $("#newEngBtn").onclick = () => { if (state.view !== "home") closeEngagement(); openNewEngForm(); };
 $("#candDrawerClose").onclick = () => closeDrawer();
-$("#scrim").onclick = () => { closeDrawer(); closeNotesDrawer(); };
+$("#scrim").onclick = () => { closeDrawer(); closeNotesDrawer(); closeMoreSheet(); };
 $("#notesClose").onclick = () => closeNotesDrawer();
 $("#notesOpen").onclick = () => openNotesDrawer();
 window.addEventListener("popstate", () => { if (state.drawerId) closeDrawer(true); });
@@ -2237,6 +2327,7 @@ document.addEventListener("keydown", (e) => {
   }
   if (e.key === "Escape") {
     if (!$("#searchResults").classList.contains("hidden")) closeSearchResults();
+    else if (state.moreOpen) closeMoreSheet();
     else if (state.notesOpen) closeNotesDrawer();
     else closeDrawer();
   }
@@ -2250,6 +2341,14 @@ document.addEventListener("keydown", (e) => {
     else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
   }
 });
+
+// A tábla/lista váltás a képernyőmérettel is változhat — kövessük.
+if (typeof matchMedia === "function") {
+  const mq = matchMedia(NARROW);
+  const onChange = () => { if (state.project && state.view === "jeloltek") renderCandidatesView(state.project); };
+  if (mq.addEventListener) mq.addEventListener("change", onChange);
+  else if (mq.addListener) mq.addListener(onChange);
+}
 
 // Init — a visszatérő felhasználót a legutóbbi állapothoz visszük.
 (async () => {

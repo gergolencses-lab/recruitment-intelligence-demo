@@ -51,6 +51,8 @@
         </div>
       </header>
 
+      <div id="subNav" class="subnav" role="tablist" aria-label="Lépések a fázison belül"></div>
+
       <div class="scroll" id="scroll">
 
         <!-- ── MEGBÍZÁSOK (nyitóképernyő) ── -->
@@ -197,6 +199,13 @@
       <button id="notesClose" class="btn btn-ghost" aria-label="Napló bezárása" title="Bezárás (Esc)">✕</button>
     </div>
     <div id="notesBody" class="drawer-body"></div>
+  </div>
+
+  <!-- Alsó navigáció: keskeny képernyőn a fázisok, ⋯ mögött a ritkábbak -->
+  <nav id="botNav" class="botnav hidden" aria-label="Fő navigáció"></nav>
+  <div id="moreSheet" class="sheet hidden" role="dialog" aria-modal="true" aria-label="További műveletek">
+    <div class="sheet-grip"></div>
+    <div id="moreBody" class="sheet-body"></div>
   </div>
 
   <div id="toast" class="toast hidden"></div>
