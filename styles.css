@@ -256,6 +256,23 @@ body.no-scroll{overflow:hidden}
 .lane-body{margin-top:10px}
 @media (prefers-reduced-motion: reduce){.board{scroll-behavior:auto}.lgroup>summary::before{transition:none}.bcard{transition:none}}
 @media (max-width:1100px){.bcol{flex:0 0 min(74vw,260px)}}
+
+/* ── FÁZISOK AZ OLDALSÁVBAN ── */
+.phase{margin:14px 0 2px}
+.phase-head{display:flex;align-items:center;gap:7px;padding:0 9px 5px;font-size:10.5px;font-weight:700;
+  letter-spacing:.08em;text-transform:uppercase;color:rgba(255,255,255,.42)}
+.phase.done .phase-head{color:rgba(255,255,255,.55)}
+.phase-tick{color:rgba(255,255,255,.3);font-weight:800}
+.phase.done .phase-tick{color:var(--accent-bright)}
+.phase-note{margin-left:auto;font-variant-numeric:tabular-nums;letter-spacing:0;font-size:10px;color:rgba(255,255,255,.5)}
+.step.sub{padding-left:20px;font-size:13px}
+.step.locked{color:rgba(255,255,255,.4)}
+.step-lock{margin-left:auto;font-size:9.5px;letter-spacing:.05em;text-transform:uppercase;color:rgba(255,255,255,.35)}
+.side-notes{margin:14px 4px 0;padding:8px 9px;width:calc(100% - 8px);text-align:left;font-family:inherit;font-size:13px;
+  color:rgba(255,255,255,.72);background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.13);border-radius:8px;cursor:pointer}
+.side-notes:hover{background:rgba(255,255,255,.12);color:#fff}
+#notesBody .d-sec h5{display:flex;align-items:center;gap:8px}
+#notesBody select{font-family:inherit}
 .klist{margin:6px 0 0;padding-left:18px}
 .klist li{margin-bottom:5px}
 .flag{background:var(--coral-soft);border-left:3px solid var(--coral);padding:8px 12px;border-radius:0 8px 8px 0;margin-bottom:6px;font-size:13px}
