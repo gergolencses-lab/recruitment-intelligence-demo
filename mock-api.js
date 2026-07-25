@@ -10,7 +10,7 @@
 
   // ── Minta jelölt-készlet (senior tech / CEE) — nem valós személyek ──
   const POOL = [
-    { name: "Bogdán Ádám", headline: "Staff Backend Engineer — payments, Go/Rust", current_company: "(régiós fintech scale-up)", location: "Budapest, HU", signals: [{ signal: "8+ év elosztott rendszerek, utolsó 3 év payments core", strength: "erős" }, { signal: "Konferencia-előadó (Craft Conf), skálázás-témában", strength: "közepes" }, { signal: "OSS: karbantart egy idempotency-key libet", strength: "közepes" }] },
+    { name: "Bogdán Ádám", headline: "Staff Backend Engineer — payments, Go/Rust", current_company: "(régiós fintech scale-up)", location: "Budapest, HU", past_companies: ["(neobank B)", "(telco digital unit)"], signals: [{ signal: "8+ év elosztott rendszerek, utolsó 3 év payments core", strength: "erős" }, { signal: "Konferencia-előadó (Craft Conf), skálázás-témában", strength: "közepes" }, { signal: "OSS: karbantart egy idempotency-key libet", strength: "közepes" }] },
     { name: "Nowak Katarzyna", headline: "Principal Platform Engineer — Kubernetes, SRE", current_company: "(lengyel unicorn)", location: "Kraków, PL", signals: [{ signal: "Platform-csapatot épített 0-ról 12 főre", strength: "erős" }, { signal: "CNCF meetup társszervező Krakkóban", strength: "közepes" }] },
     { name: "Varga Eszter", headline: "Senior ML Engineer — MLOps, forecasting", current_company: "(energetikai adatcég)", location: "Budapest, HU", signals: [{ signal: "Idősoros előrejelző pipeline productionben (villamosenergia)", strength: "erős" }, { signal: "PyData Budapest előadás feature-store témában", strength: "közepes" }] },
     { name: "Horák Tomáš", headline: "Engineering Manager — embedded / IoT", current_company: "(cseh ipari OEM)", location: "Brno, CZ", signals: [{ signal: "Firmware + felhő-kapcsolat, 20 fős szervezet", strength: "erős" }, { signal: "Korábban IC-ként RTOS-scheduler contribs", strength: "közepes" }] },
@@ -18,7 +18,7 @@
     { name: "Ionescu Andrei", headline: "Senior Data Engineer — streaming, Kafka/Flink", current_company: "(román e-commerce)", location: "Cluj-Napoca, RO", signals: [{ signal: "Valós idejű pipeline 2M event/perc", strength: "erős" }, { signal: "Meetup-előadó stream processing témában", strength: "közepes" }] },
     { name: "Szabó Réka", headline: "Principal Security Engineer — appsec, cloud", current_company: "(régiós bank tech-leánya)", location: "Budapest, HU", signals: [{ signal: "Threat-modeling programot vezetett be", strength: "erős" }, { signal: "CVE-jelentések, felelős disclosure track", strength: "közepes" }] },
     { name: "Wójcik Marek", headline: "Staff Engineer — distributed databases", current_company: "(infra startup)", location: "Warsaw/Remote, PL", signals: [{ signal: "Consensus/replikáció mély szakértelem", strength: "erős" }, { signal: "OSS commitok egy elosztott KV-store-ba", strength: "erős" }] },
-    { name: "Tóth Gergely", headline: "Senior Site Reliability Engineer — observability", current_company: "(telco digital unit)", location: "Budapest, HU", signals: [{ signal: "SLO-kultúrát honosított meg 6 csapatnál", strength: "erős" }, { signal: "OpenTelemetry contributor", strength: "közepes" }] },
+    { name: "Tóth Gergely", headline: "Senior Site Reliability Engineer — observability", current_company: "(telco digital unit)", location: "Budapest, HU", past_companies: ["(régiós bank tech-leánya)"], signals: [{ signal: "SLO-kultúrát honosított meg 6 csapatnál", strength: "erős" }, { signal: "OpenTelemetry contributor", strength: "közepes" }] },
     { name: "Novák Lucia", headline: "Engineering Lead — fintech mobile", current_company: "(szlovák neobank)", location: "Bratislava, SK", signals: [{ signal: "iOS+Android csapat, 0-1 termékindítás", strength: "erős" }, { signal: "Női tech-mentorprogram szervezője", strength: "közepes" }] },
     { name: "Farkas Dániel", headline: "Senior Backend Engineer — event-sourcing, .NET", current_company: "(logisztikai SaaS)", location: "Debrecen/Remote, HU", signals: [{ signal: "CQRS/event-sourcing productionben 4 éve", strength: "erős" }] },
     { name: "Popescu Maria", headline: "Staff Data Scientist — pricing, optimization", current_company: "(marketplace)", location: "Bucharest, RO", signals: [{ signal: "Dinamikus árazó modell, mért árbevétel-hatás", strength: "erős" }, { signal: "Kaggle Grandmaster", strength: "közepes" }] },
@@ -27,7 +27,7 @@
   ];
   function synthPool() {
     return POOL.map(function (c, i) {
-      return Object.assign({}, c, {
+      return Object.assign({ past_companies: [] }, c, {
         id: "syn-" + String(i + 1).padStart(3, "0"), synthetic: true, source_url: null,
         source_type: "synthetic", art14_status: "n/a (mintaadat)", is_person: true,
         provenance: { method: "synthetic-pool", query: null, fetched_at: new Date().toISOString() },
@@ -35,10 +35,76 @@
     });
   }
 
+  // ── Az ügyfélhez kötődő jelöltek ────────────────────────────────────────
+  // A kutatás a valóságban is bedobja őket (publikus profil = publikus profil),
+  // ezért a demóban is megjelennek — a felület dolga kiszűrni és megindokolni,
+  // nem eltitkolni. Három tipikus eset: jelenlegi munkatárs, volt munkatárs,
+  // és leányvállalat/eltérő cégnév-alak.
+  function clientInsiders(client) {
+    const cl = client || "(az ügyfél)";
+    return [
+      {
+        id: "syn-cli-01", name: "Deák Zsófia", headline: "Senior Backend Engineer — payments platform",
+        current_company: cl, location: "Budapest, HU", past_companies: ["(régiós ISV)"],
+        signals: [{ signal: "3 éve a payments platformon dolgozik", strength: "erős" }, { signal: "Belső platform-guild vezetője", strength: "közepes" }],
+      },
+      {
+        id: "syn-cli-02", name: "Rácz Ábel", headline: "Staff Engineer — core banking integrations",
+        current_company: "(kereskedelmi bank IT-leánya)", location: "Budapest, HU", past_companies: [cl, "(telco digital unit)"],
+        signals: [{ signal: "Korábban az ügyfélnél épített fizetési integrációkat", strength: "erős" }, { signal: "9 év JVM-ökoszisztéma", strength: "közepes" }],
+      },
+      {
+        id: "syn-cli-03", name: "Halász Petra", headline: "Engineering Manager — fizetési integrációk",
+        current_company: cl + " Technologies", location: "Budapest/Remote, HU", past_companies: [],
+        signals: [{ signal: "8 fős integrációs csapatot vezet", strength: "erős" }, { signal: "Korábban IC-ként ledger-rendszeren dolgozott", strength: "közepes" }],
+      },
+    ].map(function (c) {
+      return Object.assign({}, c, {
+        synthetic: true, source_url: null, source_type: "synthetic",
+        art14_status: "n/a (mintaadat)", is_person: true,
+        provenance: { method: "synthetic-pool", query: null, fetched_at: new Date().toISOString() },
+      });
+    });
+  }
+  // A kutatás kimenete: a nyers merítés, benne az ügyfélhez kötődőkkel.
+  function discoverPool(client) {
+    const pool = synthPool(), ins = clientInsiders(client);
+    pool.splice(1, 0, ins[0]);
+    pool.splice(4, 0, ins[1]);
+    pool.splice(7, 0, ins[2]);
+    return pool;
+  }
+
   // ── Minta-outputok (az éles kimenetek formája) ──
   const demo = {
     intakeReframe: function () { return { _demo: true, reframed_brief: "Nem 'senior Java fejlesztőt' kerestek — hanem valakit, aki egy skálázódó payments core-t stabilan tud tartani növekvő terhelés alatt, és mellé csapatot is emel. A nyelv másodlagos, a rendszergondolkodás az elsődleges.", must_haves: ["Bizonyított elosztott-rendszer tapasztalat production terhelésen", "Volt már 'on-call' felelőssége éles pénzügyi rendszerért", "Mentorált/emelt más mérnököket"], nice_to_haves: ["Payments/fintech domain", "Go vagy Rust", "OSS-jelenlét"], clarification_points: ["A '10+ év Java' fölösleges szűkítés — kizár erős poliglott mérnököket.", "A brief 'egyedül vigye a rendszert' + 'csapatépítés' — ez két külön szerep; tisztázni kell a hiring managerrel."], inferred_requirements: ["A briefből következtetve valószínűleg tech-lead kell, nem tiszta IC — a 'senior' szó itt lead-szerepet takarhat. Egyeztetendő."], search_hypotheses: ["Régiós fintech scale-upök payments-csapatai", "Craft Conf / infra-meetup előadók", "OSS: idempotency / distributed-tx libek karbantartói"] }; },
-    queryBuild: function () { return { _demo: true, boolean_queries: [{ platform: "linkedin-xray", query: 'site:linkedin.com/in ("staff engineer" OR "principal engineer" OR "tech lead") payments (Go OR Rust OR Java) (Budapest OR Warsaw OR Prague OR remote)' }, { platform: "github", query: 'site:github.com payments idempotency location:Hungary OR location:Poland' }, { platform: "google", query: '"craft conf" OR "pycon" speaker distributed systems payments 2024 2025' }], firecrawl_search_queries: ["site:linkedin.com/in staff engineer payments Go Rust Budapest OR Warsaw", "site:github.com senior backend engineer payments idempotency Hungary OR Poland", "craft conf speaker distributed systems payments CEE", "principal platform engineer Kubernetes SRE Krakow OR Prague site:linkedin.com/in"], target_companies: ["(régiós fintechek)", "(neobankok)", "(payment PSP-k)", "(infra startupok)"], target_titles: ["Staff Engineer", "Principal Engineer", "Tech Lead", "Engineering Manager (hands-on)"], synonyms: ["distributed systems", "payments core", "high-throughput", "event-sourcing", "SRE"] }; },
+    queryBuild: function (input) {
+      // Az ügyfél saját cégét a lekérdezés szintjén is kizárjuk — a kizárás
+      // nem utólagos szűrés, hanem a keresési terv része.
+      const client = (input && input.client) || "";
+      const neg = client ? ' -"' + client + '"' : "";
+      return {
+        _demo: true,
+        boolean_queries: [
+          { platform: "linkedin-xray", query: 'site:linkedin.com/in ("staff engineer" OR "principal engineer" OR "tech lead") payments (Go OR Rust OR Java) (Budapest OR Warsaw OR Prague OR remote)' + neg },
+          { platform: "github", query: "site:github.com payments idempotency location:Hungary OR location:Poland" + neg },
+          { platform: "google", query: '"craft conf" OR "pycon" speaker distributed systems payments 2024 2025' + neg },
+        ],
+        firecrawl_search_queries: [
+          "site:linkedin.com/in staff engineer payments Go Rust Budapest OR Warsaw" + neg,
+          "site:github.com senior backend engineer payments idempotency Hungary OR Poland" + neg,
+          "craft conf speaker distributed systems payments CEE",
+          "principal platform engineer Kubernetes SRE Krakow OR Prague site:linkedin.com/in" + neg,
+        ],
+        target_companies: ["(régiós fintechek)", "(neobankok)", "(payment PSP-k)", "(infra startupok)"],
+        target_titles: ["Staff Engineer", "Principal Engineer", "Tech Lead", "Engineering Manager (hands-on)"],
+        synonyms: ["distributed systems", "payments core", "high-throughput", "event-sourcing", "SRE"],
+        exclude_companies: client ? [client] : [],
+        exclusion_note: client
+          ? "Az ügyfél (" + client + ") jelenlegi és volt munkatársai nem kerülnek a merítésbe — őket a hiring manager amúgy is ismeri."
+          : "Add meg az ügyfél nevét a pozícióadatoknál, hogy a saját munkatársai automatikusan kimaradjanak.",
+      };
+    },
     talentMap: function () { return { _demo: true, target_companies: [{ name: "(régiós fintech A)", why: "Payments core, ismert magas terhelés", likely_roles: ["Staff BE", "SRE"], url_guess: null }, { name: "(neobank B)", why: "Skálázódó mobil+backend, friss tőkebevonás → mozgásban a piac", likely_roles: ["Tech Lead"], url_guess: null }, { name: "(infra startup C)", why: "Elosztott DB szakértelem koncentrálódik", likely_roles: ["Staff Engineer"], url_guess: null }], competitor_clusters: ["Payments PSP-k", "Neobankok", "B2B fintech infra"], where_they_gather: ["Craft Conf", "CNCF/K8s meetupok (Krakkó, Bp)", "PyData", "belső platform-guildök"] }; },
     profileAssess: function (input) { return { _demo: true, candidate_id: input && input.candidate_id, fit: "erős", fit_reason: "A jelek payments-core productiont és OSS-karbantartást mutatnak — a szerep magja lefedve; a formális vezetés nyitott kérdés, de nem kizáró.", profile_summary: "A jelek staff-szintre utalnak: rendszer-szintű döntések, mások emelése. A payments-terhelés éles felelősség volt.", role_relevant_signals: [{ signal: "Payments core productionben 3 év", strength: "erős", evidence: "headline + konferencia-téma" }, { signal: "OSS idempotency-lib karbantartás", strength: "közepes", evidence: "GitHub" }, { signal: "Craft Conf előadás skálázásról", strength: "közepes", evidence: "publikus program" }], questions_to_clarify: ["Vezetett-e formálisan csapatot, vagy technikai lead volt?", "Mennyire volt on-call felelőssége?"], unknowns: ["Jelenlegi elégedettsége / vált-e szívesen", "Fizetési elvárás", "Remote vs. iroda preferencia"], key_strength: "Ritka kombináció: mély elosztott-rendszer tapasztalat + valós payments-felelősség + közösségi láthatóság.", evidence: ["headline", "GitHub", "konferencia-program"] }; },
     rankTargets: function (input) { var cands = (input && input.candidates) || []; var n = cands.length; return { _demo: true, ranked: cands.map(function (c, i) { return { candidate_id: c.id, name: c.name, contact_priority: i + 1, tier: i < 3 ? "A — elsőként keresd meg" : i < 7 ? "B — következő kör" : i < n - 2 ? "C — figyelőlista" : "D — most nem javasolt", rationale: i < 3 ? "Legerősebb evidencia + jó elérhetőség; itt a legmagasabb a válasz-esély." : i < n - 2 ? "Erős jel, de gyengébb elérhetőség vagy kevesebb megerősítés." : "A jelek gyengék vagy szerep-irrelevánsak — most nem javasolt megkeresni.", evidence: (c.signals || []).slice(0, 1).map(function (s) { return s.signal; }) }; }), note: "Prioritási javaslat evidencia alapján — a recruiter felülbírálhatja." }; },
@@ -48,6 +114,185 @@
     interviewIntel: function () { return { _demo: true, competency_questions: [{ competency: "Elosztott rendszerek", question: "Mesélj egy partial-failure esetről a payments-ben — hogyan vetted észre, mit tettél?", what_good_looks_like: "Konkrét eset, mérés, trade-off, nem tankönyv." }, { competency: "Vezetés/emelés", question: "Volt, akit te emeltél a következő szintre? Hogyan?", what_good_looks_like: "Nevesített példa, konkrét lépések, nem 'segítettem a csapatnak'." }, { competency: "Rendszer-döntés", question: "Egy architektúra-döntés, amit ma másképp hoznál meg — miért?", what_good_looks_like: "Önreflexió + tanulás, nem védekezés." }], signals_to_clarify: ["Csak 'mi' nyelv, sose 'én' a felelősségnél", "Nem tud mérést mondani a hatásához"] }; },
     recruitmentCoach: function () { return { _demo: true, recommended_approach: "Ne a briefből indulj, hanem tisztázd: 'miért pont Java?' és 'IC vagy lead?'. A brief végrehajtása helyett a brief pontosítása hozza a legtöbb értéket — mielőtt keresel.", one_lever_now: "A megkeresésnél mindig kösd az első mondatot a jelölt saját munkájához — ez önmagában érdemben emeli a válaszarányt.", skill_focus: "Brief-tisztázás: az ellentmondások kiszúrása és egyeztetése a hiring managerrel.", encouragement: "A jelöltlistád releváns — a következő lépés a személyre szabott megkeresésben van." }; },
   };
+
+  /* ───────────────────────────────────────────────────────────────────────
+     Stratégia-asszisztens — szűk hatókörű chat a keresési terv és a
+     célpiac-térkép szerkesztésére. A rendszer-prompt rögzíti, hogy ez az
+     asszisztens KIZÁRÓLAG stratégiát és térképet szerkeszt: nem értékel
+     jelöltet és nem ír megkeresést. A statikus demóban élő modell helyett
+     szándék-felismerés fut, de a szerződés (bemenet → válasz + műveletek)
+     azonos az élessel.
+     ─────────────────────────────────────────────────────────────────────── */
+  function strategySystemPrompt(p) {
+    const pos = (p && p.position) || {};
+    return [
+      "Te a JEL keresési stratégia-asszisztense vagy.",
+      "Hatókör: EGYETLEN megbízás keresési terve (célpozíciók, célcégek, kulcs-szinonimák, kizárt cégek, boolean és webes lekérdezések) és célpiac-térképe (célcégek, versenytárs-klaszterek, közösségek).",
+      "Amit NEM csinálsz: jelöltet nem értékelsz, megkeresést nem írsz, briefet nem elemzel, üzenetet nem küldesz — ezekre átirányítod a recruitert a megfelelő nézetre.",
+      "Minden módosítást tételesen visszajelzel, és a recruiter egy kattintással visszavonhatja.",
+      "Ha nincs elég információd a végrehajtáshoz, javaslatot teszel — de magadtól nem alkalmazod.",
+      "Az ügyfél saját cégét és a kizárt (off-limits) cégeket soha nem javaslod célcégként.",
+      "Megbízás: " + [pos.title, pos.client, pos.location, pos.seniority].filter(Boolean).join(" · "),
+    ].join("\n");
+  }
+
+  const fold = (s) => String(s == null ? "" : s).toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+  // Sorrend számít: a szűkebb kulcsszavak előrébb (a „kizárt cégek” előzi a „cégek”-et).
+  const CHAT_FIELDS = [
+    { target: "exclusions", field: "companies", label: "kizárt cégek", kws: ["kizart ceg", "kizart", "off limits", "offlimits", "off-limits", "tiltolista", "tilto lista", "blacklist"] },
+    { target: "map", field: "target_companies", label: "célpiac-térkép cégei", kws: ["terkep", "talent map", "celpiac terkep"] },
+    { target: "map", field: "competitor_clusters", label: "versenytárs-klaszterek", kws: ["klaszter", "versenytars", "cluster", "szegmens"] },
+    { target: "map", field: "where_they_gather", label: "közösségek és rendezvények", kws: ["kozosseg", "rendezveny", "meetup", "konferencia", "esemeny", "community"] },
+    { target: "query", field: "target_titles", label: "célpozíciók", kws: ["celpozicio", "pozicio", "titulus", "job title", "szerepkor", "title"] },
+    { target: "query", field: "synonyms", label: "kulcs-szinonimák", kws: ["szinonima", "kulcsszo", "kulcs szo", "kifejezes", "keyword"] },
+    { target: "query", field: "boolean_queries", label: "boolean lekérdezések", kws: ["boolean", "xray", "x-ray", "x ray"] },
+    { target: "query", field: "firecrawl_search_queries", label: "webes kereső-lekérdezések", kws: ["webes lekerdezes", "kereso lekerdezes", "firecrawl", "web query"] },
+    { target: "query", field: "target_companies", label: "célcégek", kws: ["celceg", "cel ceg", "ceget", "cegek", "ceg", "company", "companies", "munkaltato"] },
+  ];
+  const RM_KWS = ["vedd ki", "vedd le", "szedd ki", "torold", "torol", "tavolits", "tavolitsd", "ne legyen", "hagyd ki", "kivesz", "remove", "delete", "vegyel ki", "vegyuk ki"];
+  const ADD_KWS = ["adj hozza", "add hozza", "adjatok", "vedd fel", "vegyuk fel", "vegyel fel", "bovitsd", "bovits", "egeszitsd", "tegyel hozza", "tedd hozza", "irj be", "sorolj fel", "add "];
+  const EXCL_KWS = ["zard ki", "zarjuk ki", "kizar", "ne keress", "tiltsd", "tilts", "off limits", "offlimits", "off-limits"];
+  const ASK_KWS = ["javasol", "javaslat", "milyen", "mit ajanl", "otlet", "mire gondolsz", "adnal", "tudsz ajanlani", "?"];
+  const HELP_KWS = ["mit tudsz", "segitseg", "mire vagy kepes", "help", "hogyan mukod"];
+
+  const SUGGESTIONS = {
+    "query:target_companies": ["(nemzetközi PSP D)", "(kártyakibocsátó platform E)", "(B2B fintech infra F)", "(treasury/ledger SaaS G)"],
+    "query:target_titles": ["Backend Architect", "Head of Platform", "Senior Staff Engineer", "Payments Domain Lead"],
+    "query:synonyms": ["idempotency", "ledger", "double-entry", "PCI DSS", "reconciliation", "high-availability"],
+    "query:boolean_queries": ['site:linkedin.com/in ("payments platform" OR "billing platform") ("staff" OR "principal") (Budapest OR Prague)'],
+    "query:firecrawl_search_queries": ["fintech engineering blog payments architecture CEE 2025"],
+    "exclusions:companies": ["(az ügyfél leányvállalata)", "(közös tulajdonú testvércég)"],
+    "map:target_companies": ["(nemzetközi PSP D)", "(kártyakibocsátó platform E)", "(treasury/ledger SaaS G)"],
+    "map:competitor_clusters": ["Kártyakibocsátók", "Treasury/ledger SaaS", "Fizetési orchestrátorok"],
+    "map:where_they_gather": ["FinTech meetup Budapest", "KubeCon EU", "Rust/Go Budapest meetup"],
+  };
+
+  function detectField(t) {
+    for (const f of CHAT_FIELDS) for (const k of f.kws) if (t.indexOf(k) >= 0) return f;
+    return null;
+  }
+  function currentList(p, target, field) {
+    if (target === "query") return ((p.query || {})[field] || []);
+    if (target === "map") return ((p.talent_map || {})[field] || []);
+    if (target === "exclusions") return ((p.exclusions || {})[field] || []);
+    return [];
+  }
+  function valOf(x) { return x && typeof x === "object" ? (x.name || x.query || "") : String(x == null ? "" : x); }
+  // Tisztítás: parancsszavak, névelők, magyar tárgyrag-maradványok levágása.
+  function cleanTok(s) {
+    let t = String(s || "").replace(/^[\s\-–—•*"'„”]+|[\s.!?"'„”]+$/g, "").trim();
+    t = t.replace(/^(a|az|és|meg|valamint|the)\s+/i, "").trim();
+    if (t.length < 2) return "";
+    if (RM_KWS.concat(ADD_KWS, EXCL_KWS).some((k) => fold(t) === k.trim())) return "";
+    return t;
+  }
+  function extractValues(raw) {
+    let s = String(raw || "");
+    const quoted = s.match(/[„"'”]([^„"'”]{2,80})[„"'”]/g);
+    if (quoted && quoted.length) return quoted.map((q) => cleanTok(q.replace(/[„"'”]/g, ""))).filter(Boolean);
+    const i = s.search(/[:：]/);
+    if (i >= 0) s = s.slice(i + 1);
+    else {
+      // Nincs kettőspont: leszedjük a parancs- és mezőszavakat a mondat elejéről.
+      let f = fold(s);
+      const kill = RM_KWS.concat(ADD_KWS, EXCL_KWS).concat(CHAT_FIELDS.reduce((a, x) => a.concat(x.kws), []));
+      kill.sort((a, b) => b.length - a.length);
+      for (const k of kill) { const at = f.indexOf(k); if (at >= 0) { s = s.slice(0, at) + " " + s.slice(at + k.length); f = fold(s); } }
+      s = s.replace(/\b(kozott|kozul|kozze|hoz|hez|höz|ba|be|ra|re|tol|tol|bol|bol)\b/gi, " ");
+    }
+    return s.split(/,|;|\bés\b|\band\b|\bvalamint\b|\billetve\b/i).map(cleanTok).filter(Boolean).slice(0, 8);
+  }
+  // Meglévő elem megkeresése lazán (ragos alak, kis-nagybetű, részleges egyezés).
+  function findExisting(listArr, token) {
+    const t = fold(token);
+    if (!t) return null;
+    let hit = listArr.find((x) => fold(valOf(x)) === t);
+    if (hit !== undefined) return hit;
+    hit = listArr.find((x) => { const v = fold(valOf(x)); return v.length > 2 && (t.indexOf(v) >= 0 || v.indexOf(t) >= 0); });
+    return hit === undefined ? null : hit;
+  }
+
+  function strategyChat(msg, p) {
+    const raw = String(msg || "").trim();
+    const t = fold(raw);
+    const sys = strategySystemPrompt(p);
+    if (!raw) return { _demo: true, reply: "Írd le, mit módosítsak a keresési terven vagy a célpiac-térképen.", actions: [], proposals: [], system_prompt: sys };
+
+    // Hatókörön kívüli kérés — a rendszer-prompt szerint átirányítunk.
+    if (/(jelolt|candidate)\w*\s*(ertekel|pontoz|rangsor)|irj (egy )?(uzenet|megkeres|emailt|levelet)|outreach szoveg|brief elemz/.test(t)) {
+      return {
+        _demo: true, system_prompt: sys, actions: [], proposals: [],
+        reply: "Ez kívül esik a hatókörömön — én a keresési tervet és a célpiac-térképet szerkesztem. Jelölt-értékeléshez a Jelöltek, üzenetvázlathoz a Megkeresések, briefhez a Pozíció és brief nézet való.",
+      };
+    }
+    if (HELP_KWS.some((k) => t.indexOf(k) >= 0)) {
+      return {
+        _demo: true, system_prompt: sys, actions: [], proposals: [],
+        reply: "A keresési terv és a célpiac-térkép szerkesztése a dolgom. Például: „Adj hozzá a célcégekhez: (nemzetközi PSP D), (kártyakibocsátó E)” · „Vedd ki a szinonimák közül az SRE-t” · „Zárd ki az ügyfél leányvállalatát” · „Milyen célpozíciókat javasolsz még?” · „Készíts célpiac-térképet”.",
+      };
+    }
+    // Térkép/terv generálás
+    if (/(keszits|csinalj|generalj|allits ossze)/.test(t) && /(terkep|talent map)/.test(t)) {
+      return { _demo: true, system_prompt: sys, actions: [{ op: "generate", target: "map", label: "célpiac-térkép elkészítése" }], proposals: [], reply: "Összeállítottam a célpiac-térképet. Nézd át, és mondd, mit vegyek ki vagy hozzá." };
+    }
+    if (/(keszits|csinalj|generalj|frissitsd|allits ossze)/.test(t) && /(keresesi terv|search plan|lekerdezes)/.test(t) && !/(vedd|torol|hagyd)/.test(t)) {
+      return { _demo: true, system_prompt: sys, actions: [{ op: "generate", target: "query", label: "keresési terv frissítése" }], proposals: [], reply: "Frissítettem a keresési tervet. A kézzel felvett elemeidet megtartottam." };
+    }
+
+    const isExcl = EXCL_KWS.some((k) => t.indexOf(k) >= 0);
+    const isRm = !isExcl && RM_KWS.some((k) => t.indexOf(k) >= 0);
+    let f = detectField(t);
+    if (isExcl) f = CHAT_FIELDS[0]; // kizárás → mindig az off-limits lista
+    const asks = ASK_KWS.some((k) => t.indexOf(k) >= 0);
+
+    if (!f) {
+      return {
+        _demo: true, system_prompt: sys, actions: [], proposals: [],
+        reply: "Nem tudtam eldönteni, melyik listát módosítsam. Nevezd meg: célcégek, célpozíciók, kulcs-szinonimák, kizárt cégek, versenytárs-klaszterek, közösségek, boolean lekérdezések, vagy a célpiac-térkép cégei.",
+      };
+    }
+
+    const key = f.target + ":" + f.field;
+    const listArr = currentList(p, f.target, f.field);
+    let values = extractValues(raw);
+
+    // Kérdés vagy nincs kinyerhető érték → javaslat, nem végrehajtás.
+    if ((asks && !isRm && !isExcl) || !values.length) {
+      const have = new Set(listArr.map((x) => fold(valOf(x))));
+      const pool = (SUGGESTIONS[key] || []).filter((s) => !have.has(fold(s)));
+      if (!pool.length) {
+        return { _demo: true, system_prompt: sys, actions: [], proposals: [], reply: "Erre a listára most nincs olyan javaslatom, ami ne szerepelne már benne. Írd be konkrétan, mit vegyek fel — például „" + f.label + ": …”." };
+      }
+      return {
+        _demo: true, system_prompt: sys, actions: [],
+        proposals: pool.slice(0, 4).map((v) => ({ op: isRm ? "remove" : "add", target: f.target, field: f.field, value: v, label: v })),
+        reply: "Ezeket javaslom a(z) " + f.label + " listához. Egyenként alkalmazhatod — magamtól nem írom felül a tervedet.",
+      };
+    }
+
+    const actions = [], skipped = [];
+    for (const v of values) {
+      if (isRm) {
+        const hit = findExisting(listArr, v);
+        if (hit == null) { skipped.push(v); continue; }
+        actions.push({ op: "remove", target: f.target, field: f.field, value: hit, label: valOf(hit) });
+      } else {
+        if (findExisting(listArr, v) != null) { skipped.push(v); continue; }
+        const val = f.target === "map" && f.field === "target_companies"
+          ? { name: v, why: "A recruiter vette fel a stratégia-asszisztensen keresztül.", likely_roles: [] }
+          : v;
+        actions.push({ op: "add", target: f.target, field: f.field, value: val, label: v });
+      }
+    }
+    if (!actions.length) {
+      return { _demo: true, system_prompt: sys, actions: [], proposals: [], reply: (isRm ? "Nem találtam a listában: " : "Már szerepel a listában: ") + skipped.join(", ") + ". A(z) " + f.label + " így változatlan." };
+    }
+    const verb = isRm ? "Kivettem" : isExcl ? "Kizártam" : "Felvettem";
+    let reply = verb + " a(z) " + f.label + " közül/közé: " + actions.map((a) => a.label).join(", ") + ".";
+    if (skipped.length) reply += " Kihagytam (" + (isRm ? "nem találtam" : "már szerepelt") + "): " + skipped.join(", ") + ".";
+    if (isExcl) reply += " A kizárt cégek jelenlegi és volt munkatársai nem kerülnek a jelöltlistára.";
+    return { _demo: true, system_prompt: sys, actions, proposals: [], reply };
+  }
 
   function art14(candidate, controller) {
     const c = controller || {};
@@ -61,7 +306,7 @@
   // ── In-memory megbízás-store ──
   const STORE = {};
   function emptyProject(id, name) {
-    return { id, name: name || id, position: { title: "", client: "", location: "", work_mode: "", seniority: "", owner: "", hiring_manager: "", language: "", salary_band: "", due_date: "", priority: "" }, status: "Előkészítés", priority_overrides: {}, created_at: new Date().toISOString(), updated_at: new Date().toISOString(), brief_raw: "", intake: null, query: null, candidates: [], talent_map: null, assessments: {}, ranking: null, attraction: {}, outreach: {}, outreach_status: {}, baseline_response_rate: null, first_shortlist_at: null, pilot: { cooling_days: 7, mono_source_threshold: 0.7 }, advisory: null, interview: null, coach_notes: [], memory: [], interactions: [] };
+    return { id, name: name || id, position: { title: "", client: "", location: "", work_mode: "", seniority: "", owner: "", hiring_manager: "", language: "", salary_band: "", due_date: "", priority: "" }, status: "Előkészítés", priority_overrides: {}, created_at: new Date().toISOString(), updated_at: new Date().toISOString(), brief_raw: "", intake: null, brief_final: null, query: null, candidates: [], talent_map: null, exclusions: { companies: [], candidates: {}, allow_alumni: false, client_aliases: [] }, strategy_chat: [], assessments: {}, ranking: null, attraction: {}, outreach: {}, outreach_status: {}, baseline_response_rate: null, first_shortlist_at: null, pilot: { cooling_days: 7, mono_source_threshold: 0.7 }, advisory: null, interview: null, coach_notes: [], memory: [], interactions: [] };
   }
   const daysAgo = (n) => new Date(Date.now() - n * 86400000).toISOString();
   function seed() {
@@ -70,8 +315,9 @@
     p.status = "Megkeresés folyamatban";
     p.brief_raw = "Senior Java fejlesztő, 10+ év, aki egyedül viszi a payments rendszerünket, de csapatot is épít. Budapest, hibrid.";
     p.intake = demo.intakeReframe();
-    p.query = demo.queryBuild();
-    p.candidates = synthPool();
+    p.query = demo.queryBuild({ client: p.position.client });
+    p.exclusions = { companies: [], candidates: {}, allow_alumni: false, client_aliases: [] };
+    p.candidates = discoverPool(p.position.client);
     p.discover_source = "synthetic";
     p.discover_note = "Mintaadatok (senior tech / CEE) — statikus demo, nem valós személyek. Élő kutatáshoz a helyi futtatásnál kell kulcs.";
     p.created_at = daysAgo(6);
@@ -90,10 +336,19 @@
     STORE[p.id] = p;
     // A kliens localStorage-ból dolgozik → beültetjük a minta-megbízást,
     // ha még nincs ilyen kulcs (először megnyitott statikus demo).
+    // A SEED_V emelésekor a MINTA-megbízás frissül a visszatérő látogatónál is
+    // (a saját megbízásaihoz nem nyúlunk).
+    const SEED_V = 2;
+    p.seed_version = SEED_V;
     try {
-      const LS = "ric.projects.v1";
+      const LS = "ric.projects.v1", VK = "ric.seed.v";
       const all = JSON.parse(localStorage.getItem(LS) || "{}");
-      if (!all[p.id]) { all[p.id] = p; localStorage.setItem(LS, JSON.stringify(all)); }
+      const stale = Number(localStorage.getItem(VK) || 0) < SEED_V;
+      if (!all[p.id] || stale) {
+        all[p.id] = p;
+        localStorage.setItem(LS, JSON.stringify(all));
+        localStorage.setItem(VK, String(SEED_V));
+      }
     } catch (e) {}
   }
   seed();
@@ -121,8 +376,9 @@
       if (!action) return p;
       if (action === "meta") { if (body.position) p.position = Object.assign({}, p.position, body.position); if (body.status) p.status = body.status; if (body.name) p.name = body.name; return { ok: true, position: p.position, status: p.status, name: p.name }; }
       if (action === "intake") { p.brief_raw = body.brief || ""; p.intake = demo.intakeReframe(); return p.intake; }
-      if (action === "query") { p.query = demo.queryBuild(); return p.query; }
-      if (action === "discover") { const cs = synthPool(); return { source: "synthetic", candidates: cs, note: "Mintaadatok (senior tech / CEE) — statikus demo, nincs élő kutatás." }; }
+      if (action === "query") { p.query = demo.queryBuild({ client: (p.position || {}).client }); return p.query; }
+      if (action === "discover") { const cs = discoverPool((p.position || {}).client); return { source: "synthetic", candidates: cs, note: "Mintaadatok (senior tech / CEE) — statikus demo, nincs élő kutatás." }; }
+      if (action === "strategy-chat") return strategyChat(body.message, p);
       if (action === "talent-map") { p.talent_map = demo.talentMap(); return p.talent_map; }
       const touch = (cid) => { const cd = cand(cid); if (cd) cd.last_touched = new Date().toISOString(); };
       if (action === "assess") { const o = demo.profileAssess({ candidate_id: body.candidateId }); p.assessments[body.candidateId] = o; touch(body.candidateId); return o; }

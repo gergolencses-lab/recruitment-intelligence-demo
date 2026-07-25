@@ -91,8 +91,8 @@
                 <div id="posForm"></div>
               </div>
               <div class="stage">
-                <div class="stage-head"><h2>Javasolt pozíció-összefoglaló</h2>
-                  <p class="stage-sub">A rendszer javaslata a briefből — jóváhagyás előtt ellenőrizd.</p></div>
+                <div class="stage-head"><h2>Pozíció-összefoglaló és véglegesítés</h2>
+                  <p class="stage-sub">Az AI javaslatot ad a briefből — te szerkeszted a véglegesített változatot, és az megy tovább a keresésbe.</p></div>
                 <div id="intakeOut" class="out"></div>
               </div>
             </div>
@@ -101,11 +101,12 @@
           <section id="view-celpiac" class="view eng-view">
             <div class="stage">
               <div class="stage-head"><h2>Célpiac</h2>
-                <p class="stage-sub">Hol dolgoznak a szerephez illő emberek, és milyen keresésekkel érdemes megtalálni őket.</p></div>
+                <p class="stage-sub">Hol dolgoznak a szerephez illő emberek, és milyen keresésekkel érdemes megtalálni őket. A terv és a térkép a futás után is szerkeszthető — kézzel vagy a stratégia-asszisztenssel.</p></div>
               <div class="row">
                 <button id="queryBtn" class="btn">Keresési terv készítése</button>
                 <button id="talentBtn" class="btn">Célpiac-térkép</button>
                 <button id="discoverBtn" class="btn btn-primary">Jelöltkutatás indítása</button>
+                <button id="queryResetBtn" class="btn btn-ghost" title="A kézi módosítások elvetésével új tervet kér">Új terv nulláról</button>
               </div>
               <details class="adv-details"><summary>Adatforrás és részletek</summary>
                 <div class="row" style="margin-top:8px">
@@ -119,9 +120,11 @@
                 </div>
               </details>
               <div id="queryOut" class="out"></div>
+              <div id="exclOut" class="out"></div>
               <div id="talentOut" class="out"></div>
               <div id="discoverNote"></div>
             </div>
+            <div id="stratChat"></div>
           </section>
 
           <section id="view-jeloltek" class="view eng-view"></section>
