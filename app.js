@@ -306,55 +306,139 @@ function orState(p, id) {
 }
 function candById(p, id) { return ((p && p.candidates) || []).find((c) => c.id === id); }
 
-// A/B prioritású jelöltek munkalistája (a felülbírálatokkal együtt)
+/* ── ÁLLAPOT-LÉTRA ───────────────────────────────────────────────────────
+   Egyetlen hely mondja meg, hol tart egy jelölt. Korábban ugyanez a létra
+   több helyen volt kézzel újraírva, eltérő sorrendben — ebből származott,
+   hogy a felület több, egymásnak ellentmondó sorrendet tanított.
+   A kulcsok finomak; a felület ezekből durvít oszlopokra.                */
+const STAGE_LABEL = {
+  kizart: "kizárva a merítésből",
+  rangsorolatlan: "prioritás beállítása",
+  figyelo: "figyelőlista",
+  elvetve: "most nem javasolt",
+  nincs_terv: "megközelítési terv készítése",
+  nincs_vazlat: "üzenetvázlat készítése",
+  jovahagyasra: "vázlat ellenőrzése",
+  kuldesre: "kiküldés rögzítése",
+  kikuldve: "válaszra vár",
+  valaszolt: "folyamatban",
+};
+// A kizárás mindent megelőz: van A prioritású jelölt, aki az ügyfélnél dolgozik.
+function candStage(p, c) {
+  if (!c) return "rangsorolatlan";
+  if (isExcluded(p, c)) return "kizart";
+  const t = effTier(p, c.id);
+  if (!t) return "rangsorolatlan";
+  if (t === "C") return "figyelo";
+  if (t === "D") return "elvetve";
+  const s = orState(p, c.id);
+  if (!s.hasAttr) return "nincs_terv";
+  if (!s.hasDraft) return "nincs_vazlat";
+  if (!s.reviewed && !s.sent) return "jovahagyasra";
+  if (!s.sent) return "kuldesre";
+  if (!s.replied) return "kikuldve";
+  return "valaszolt";
+}
+// Egy jelölt teljes, származtatott sora. Semmit nem tárol — minden mező a
+// meglévő projekt-mezőkből számolódik.
+function candRow(p, c, ranked) {
+  const id = c.id;
+  const r = ranked || ((p.ranking && p.ranking.ranked) || []).find((x) => x.candidate_id === id) || {};
+  return {
+    id, cand: c,
+    tier: effTier(p, id),
+    stage: candStage(p, c),
+    excluded: isExcluded(p, c),
+    priority: F.prio(r),
+    reason: F.strength((p.assessments || {})[id]) || shorten(r.rationale, 88),
+    ...orState(p, id),
+    touched: daysSince(c.last_touched),
+  };
+}
+// A tábla öt oszlopa és két sávja. Minden jelölt pontosan egy vödörbe kerül.
+const STAGE_BUCKET = {
+  kizart: "kizart",
+  rangsorolatlan: "rangsorolatlan",
+  figyelo: "figyelolista", elvetve: "figyelolista",
+  nincs_terv: "elokeszites", nincs_vazlat: "elokeszites",
+  jovahagyasra: "jovahagyasra", kuldesre: "jovahagyasra",
+  kikuldve: "kikuldve",
+  valaszolt: "valaszolt",
+};
+function boardBuckets(p) {
+  const out = { rangsorolatlan: [], elokeszites: [], jovahagyasra: [], kikuldve: [], valaszolt: [], figyelolista: [], kizart: [] };
+  for (const c of (p && p.candidates) || []) out[STAGE_BUCKET[candStage(p, c)]].push(candRow(p, c));
+  return out;
+}
+
+// A/B prioritású jelöltek munkalistája (a felülbírálatokkal együtt).
+// A rangsor sorrendjében iterál — a stabil sorrend a lista sajátja.
 function pipelineRows(p) {
   const ranked = (p.ranking && p.ranking.ranked) || [];
   const coolDays = (p.pilot && p.pilot.cooling_days) || 7;
   const rows = [];
   for (const r of ranked) {
-    const id = r.candidate_id;
-    const tier = effTier(p, id);
-    if (tier !== "A" && tier !== "B") continue;
-    const cand = candById(p, id) || {};
-    if (isExcluded(p, cand)) continue;   // kizárt jelölt nem kerül a munkalistára
-    const os = orState(p, id);
-    rows.push({
-      id, cand, tier, priority: F.prio(r),
-      reason: F.strength((p.assessments || {})[id]) || shorten(r.rationale, 88),
-      ...os,
-      touched: daysSince(cand.last_touched),
-    });
+    const cand = candById(p, r.candidate_id);
+    if (!cand) continue;
+    const row = candRow(p, cand, r);
+    if (row.tier !== "A" && row.tier !== "B") continue;
+    if (row.excluded) continue;          // kizárt jelölt nem kerül a munkalistára
+    rows.push(row);
   }
   rows.sort((a, b) => (a.priority || 99) - (b.priority || 99));
   return { rows, coolDays };
 }
 
-// ── Következő teendő (megbízásonként egy kiemelt lépés) ─────────────────
+/* ── Következő teendő (megbízásonként egy kiemelt lépés) ─────────────────
+   Szabálytábla, nem if-létra: a szabályok sorrendben értékelődnek, az első
+   találó nyer. Így egy nézet átnevezése egy mező átírása, nem vezérlési
+   szerkezet átszabása.                                                   */
+const NEXT_STEP_RULES = [
+  { when: (x) => !x.p.brief_raw && !x.p.intake, view: "pozicio", cta: "Pozíció és brief",
+    label: () => "Illeszd be a briefet, majd futtasd az elemzést", sub: () => "A megbízás a brief tisztázásával indul" },
+  { when: (x) => !x.p.intake, view: "pozicio", cta: "Pozíció és brief",
+    label: () => "Brief elemzése", sub: () => "A brief megvan — kérj javasolt pozíció-összefoglalót" },
+  { when: (x) => !x.c.length && x.p.intake_review !== "approved", view: "pozicio", cta: "Pozíció és brief",
+    label: () => "Véglegesítsd a briefet", sub: () => "Szerkeszd a javaslatot, és hagyd jóvá — erre épül a keresés" },
+  { when: (x) => !x.c.length && !x.p.query, view: "celpiac", cta: "Célpiac",
+    label: () => "Keresési terv készítése", sub: () => "Ez adja a jelöltkutatás alapját" },
+  { when: (x) => !x.c.length, view: "celpiac", cta: "Célpiac",
+    label: () => "Jelöltkutatás indítása", sub: () => "A keresési terv kész — indíthatod a kutatást" },
+  { when: (x) => !x.p.ranking, view: "jeloltek", cta: "Jelöltek",
+    label: (x) => "Prioritási javaslat készítése", sub: (x) => `${x.c.length} jelölt vár prioritásra` },
+  { when: (x) => x.newC, view: "jeloltek", cta: "Jelöltek",
+    label: (x) => `Ellenőrizd a(z) ${x.newC} új jelöltet`, sub: () => "Az új találatok még nincsenek átnézve" },
+  { when: (x) => x.blocked.length, view: "jeloltek", cta: "Jelöltek",
+    label: (x) => `${x.blocked.length} jelöltnél hiányzik a megközelítési terv vagy az üzenetvázlat`, sub: () => "A prioritásos jelöltek megkereséséhez ezek kellenek" },
+  { when: (x) => x.toReview.length, view: "megkeresesek", cta: "Megkeresések",
+    label: (x) => `${x.toReview.length} üzenetvázlat vár ellenőrzésre`, sub: () => "Kiküldés előtt hagyd jóvá a vázlatokat" },
+  { when: (x) => x.toSend.length, view: "megkeresesek", cta: "Megkeresések",
+    label: (x) => `${x.toSend.length} jóváhagyott üzenetvázlat vár kiküldésre`, sub: () => "Küldd ki a saját csatornádon, és rögzítsd itt" },
+  { when: (x) => x.cooling.length, view: "jeloltek", cta: "Jelöltek",
+    label: (x) => `${x.cooling.length} jelöltnél régóta nincs lépés — utánkövetés`, sub: (x) => `${x.coolDays}+ napja nincs aktivitás` },
+  { when: (x) => x.awaiting.length, view: "megkeresesek", cta: "Megkeresések",
+    label: () => "Rögzítsd a beérkező válaszokat", sub: (x) => `${x.awaiting.length} kiküldött megkeresésre várunk választ` },
+  { when: () => true, view: "eredmenyek", cta: "Eredmények",
+    label: () => "Nézd át az eredményeket", sub: () => "Minden folyamatban lévő lépés naprakész" },
+];
 function nextStep(p) {
   if (!p) return null;
   const c = activeCandidates(p);
-  if (!p.brief_raw && !p.intake) return { view: "pozicio", label: "Illeszd be a briefet, majd futtasd az elemzést", sub: "A megbízás a brief tisztázásával indul", cta: "Pozíció és brief" };
-  if (!p.intake) return { view: "pozicio", label: "Brief elemzése", sub: "A brief megvan — kérj javasolt pozíció-összefoglalót", cta: "Pozíció és brief" };
-  if (!c.length) {
-    if (p.intake_review !== "approved") return { view: "pozicio", label: "Véglegesítsd a briefet", sub: "Szerkeszd a javaslatot, és hagyd jóvá — erre épül a keresés", cta: "Pozíció és brief" };
-    if (!p.query) return { view: "celpiac", label: "Keresési terv készítése", sub: "Ez adja a jelöltkutatás alapját", cta: "Célpiac" };
-    return { view: "celpiac", label: "Jelöltkutatás indítása", sub: "A keresési terv kész — indíthatod a kutatást", cta: "Célpiac" };
-  }
-  if (!p.ranking) return { view: "jeloltek", label: "Prioritási javaslat készítése", sub: `${c.length} jelölt vár prioritásra`, cta: "Jelöltek" };
-  const newC = c.filter((x) => x.is_new).length;
-  if (newC) return { view: "jeloltek", label: `Ellenőrizd a(z) ${newC} új jelöltet`, sub: "Az új találatok még nincsenek átnézve", cta: "Jelöltek" };
   const { rows, coolDays } = pipelineRows(p);
-  const blocked = rows.filter((r) => !(r.hasAttr && r.hasDraft));
-  if (blocked.length) return { view: "jeloltek", label: `${blocked.length} jelöltnél hiányzik a megközelítési terv vagy az üzenetvázlat`, sub: "A prioritásos jelöltek megkereséséhez ezek kellenek", cta: "Jelöltek" };
-  const toReview = rows.filter((r) => r.hasDraft && !r.reviewed && !r.sent);
-  if (toReview.length) return { view: "megkeresesek", label: `${toReview.length} üzenetvázlat vár ellenőrzésre`, sub: "Kiküldés előtt hagyd jóvá a vázlatokat", cta: "Megkeresések" };
-  const toSend = rows.filter((r) => r.reviewed && !r.sent);
-  if (toSend.length) return { view: "megkeresesek", label: `${toSend.length} jóváhagyott üzenetvázlat vár kiküldésre`, sub: "Küldd ki a saját csatornádon, és rögzítsd itt", cta: "Megkeresések" };
-  const cooling = rows.filter((r) => r.sent && !r.replied && (r.touched == null || r.touched > coolDays));
-  if (cooling.length) return { view: "jeloltek", label: `${cooling.length} jelöltnél régóta nincs lépés — utánkövetés`, sub: `${coolDays}+ napja nincs aktivitás`, cta: "Jelöltek" };
-  const awaiting = rows.filter((r) => r.sent && !r.replied);
-  if (awaiting.length) return { view: "megkeresesek", label: "Rögzítsd a beérkező válaszokat", sub: `${awaiting.length} kiküldött megkeresésre várunk választ`, cta: "Megkeresések" };
-  return { view: "eredmenyek", label: "Nézd át az eredményeket", sub: "Minden folyamatban lévő lépés naprakész", cta: "Eredmények" };
+  const x = {
+    p, c, coolDays, rows,
+    newC: c.filter((y) => y.is_new).length,
+    blocked: rows.filter((r) => !(r.hasAttr && r.hasDraft)),
+    toReview: rows.filter((r) => r.hasDraft && !r.reviewed && !r.sent),
+    toSend: rows.filter((r) => r.reviewed && !r.sent),
+    // FIXME: a cooling feltétele itt (sent && !replied) és a needsAttention-ben
+    // (hasAttr && !replied) eltér. Szándékosan nem egységesítjük ebben a
+    // lépésben — láthatatlan szemantikai változás lenne.
+    cooling: rows.filter((r) => r.sent && !r.replied && (r.touched == null || r.touched > coolDays)),
+    awaiting: rows.filter((r) => r.sent && !r.replied),
+  };
+  const rule = NEXT_STEP_RULES.find((r) => r.when(x));
+  return rule ? { view: rule.view, label: rule.label(x), sub: rule.sub(x), cta: rule.cta } : null;
 }
 
 // Figyelmet igényel? (nyitóképernyő jelzéshez)
@@ -362,6 +446,7 @@ function needsAttention(p) {
   if (!p.ranking) return false;
   const { rows, coolDays } = pipelineRows(p);
   const blocked = rows.filter((r) => !(r.hasAttr && r.hasDraft)).length;
+  // FIXME: lásd a nextStep cooling-megjegyzését — a két feltétel eltér.
   const cooling = rows.filter((r) => r.hasAttr && !r.replied && (r.touched == null || r.touched > coolDays)).length;
   return blocked > 0 || cooling > 0;
 }
@@ -380,7 +465,11 @@ async function loadStatus() {
 }
 
 // ── NÉZET-VÁLTÁS ────────────────────────────────────────────────────────
+// A böngészőben eltárolt nézetnév túléli a felület átalakítását. Ha egy nézet
+// megszűnik vagy átnevezik, a visszatérő látogató enélkül üres munkateret kap.
+const VIEWS = ["home", "attekintes", "pozicio", "celpiac", "jeloltek", "megkeresesek", "ugyfel", "eredmenyek", "jegyzetek"];
 function showView(v) {
+  if (!VIEWS.includes(v)) v = state.project ? "attekintes" : "home";
   if (v !== "home" && !state.project) v = "home";
   state.view = v;
   $("#view-home").classList.toggle("active", v === "home");
@@ -1192,18 +1281,8 @@ function candStateChips(p, c) {
   else if (s.hasAttr) bits.push(`<span class="chip warn">nincs vázlat</span>`);
   return bits.join("");
 }
-function candNext(p, c) {
-  const s = orState(p, c.id);
-  const t = effTier(p, c.id);
-  if (!t) return "prioritás beállítása";
-  if (t === "C" || t === "D") return t === "C" ? "figyelőlista" : "most nem javasolt";
-  if (!s.hasAttr) return "megközelítési terv készítése";
-  if (!s.hasDraft) return "üzenetvázlat készítése";
-  if (!s.reviewed && !s.sent) return "vázlat ellenőrzése";
-  if (!s.sent) return "kiküldés rögzítése";
-  if (!s.replied) return "válaszra vár";
-  return "folyamatban";
-}
+// A jelölt következő lépése — az állapot-létra egyetlen címkéje.
+function candNext(p, c) { return STAGE_LABEL[candStage(p, c)]; }
 function renderCandidatesView(p) {
   const v = $("#view-jeloltek");
   const c = p.candidates || [];

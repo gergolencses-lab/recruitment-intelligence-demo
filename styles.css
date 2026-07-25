@@ -164,6 +164,8 @@ body{font-family:var(--font);-webkit-font-smoothing:antialiased;background:var(-
 .chip.good{background:var(--good-bg);color:var(--good)}
 .chip.bad{background:var(--bad-bg);color:var(--bad)}
 .chip.warn{background:var(--warn-bg);color:var(--warn)}
+/* „nem illeszkedik” — eddig hiányzott, ezért szürkén jelent meg a piros helyett */
+.chip.crit{background:var(--bad-bg);color:var(--bad);font-weight:700}
 .klist{margin:6px 0 0;padding-left:18px}
 .klist li{margin-bottom:5px}
 .flag{background:var(--coral-soft);border-left:3px solid var(--coral);padding:8px 12px;border-radius:0 8px 8px 0;margin-bottom:6px;font-size:13px}
