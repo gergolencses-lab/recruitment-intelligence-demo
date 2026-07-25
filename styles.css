@@ -567,3 +567,90 @@ kbd{background:#F1EEE6;border:1px solid var(--line);border-radius:5px;padding:1p
   .form-grid{grid-template-columns:1fr}
   .drawer-wide{width:100vw}
 }
+
+/* ─────────────────────────────────────────────────────────────
+   Szerkeszthető listák · véglegesített brief · kizárás · chat
+   ───────────────────────────────────────────────────────────── */
+
+.card,.stage,.poz-grid>*,.ov-grid>*{min-width:0}
+.poz-grid>.stage{overflow-wrap:anywhere}
+
+/* szerkeszthető chip-lista (brief-feltételek, keresési terv kategóriái) */
+.ed-list{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:4px 0 2px;min-width:0}
+.ed-chip{display:inline-flex;align-items:center;gap:6px;font-size:12px;padding:4px 6px 4px 10px;border-radius:20px;background:#F1EEE6;color:var(--ink-3);font-weight:500;border:1px solid transparent;max-width:100%;overflow-wrap:anywhere}
+.ed-chip.bad{background:var(--bad-bg);color:var(--bad)}
+.ed-x{border:none;background:rgba(23,34,56,.08);color:var(--ink-3);width:16px;height:16px;border-radius:50%;line-height:1;font-size:12px;cursor:pointer;font-family:inherit;display:grid;place-items:center;padding:0;flex:none}
+.ed-x:hover{background:var(--bad);color:#fff}
+.ed-empty{font-size:12px;color:var(--mut-2);font-style:italic}
+.ed-add{display:inline-flex;align-items:center;gap:5px;flex:1 1 150px;min-width:0}
+.ed-in{border:1px dashed var(--line-2);border-radius:8px;padding:5px 10px;font-family:inherit;font-size:12.5px;min-width:0;flex:1;width:100%;background:#FDFCF9;color:var(--ink)}
+.ed-in:focus{outline:none;border-color:var(--accent);border-style:solid;background:#fff}
+.ed-plus{padding:4px 11px;font-size:13px;font-weight:800;line-height:1.2}
+.ed-x-btn{padding:2px 9px;font-size:14px;line-height:1.3;color:var(--mut);flex:none}
+.ed-x-btn:hover{color:var(--bad);border-color:var(--bad)}
+
+/* véglegesített brief */
+.bf-card{border-color:var(--accent-tint);background:linear-gradient(180deg,#F7FCFA,#fff)}
+.bf-text{min-height:130px;margin-top:8px;background:#fff}
+.bf-lists{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:14px}
+.bf-lists>div{min-width:0}
+@media(max-width:1320px){.bf-lists{grid-template-columns:1fr}}
+
+/* kizárás */
+.excl-card{border-color:#EDBB74}
+.excl-sum{font-size:12.5px;color:#6E5717;background:var(--warn-bg);border-radius:8px;padding:7px 11px;display:inline-block}
+.excl-toggle{display:flex;align-items:flex-start;gap:8px;margin-top:14px;font-size:12.5px;color:var(--ink-3);line-height:1.45;cursor:pointer}
+.excl-toggle input{margin-top:2px;flex:none;accent-color:var(--accent-dark)}
+.excl-banner{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;background:var(--warn-bg);border:1px solid #EDBB74;border-radius:10px;padding:11px 14px;font-size:12.5px;color:#6E5717;line-height:1.45}
+.excl-banner.sm{margin-top:12px}
+.excl-banner.d{margin-bottom:2px}
+.excl-banner.ok{background:var(--good-bg);border-color:#A9DCC8;color:var(--good)}
+.excl-banner .btn{flex:none;padding:5px 12px;font-size:12px}
+.excl-details{margin-top:16px;border:1px solid var(--line);border-radius:11px;padding:12px 14px;background:#FBFAF6}
+.excl-details>summary{cursor:pointer;font-size:12.5px;font-weight:700;color:var(--ink-3)}
+.excl-details>summary:hover{color:var(--coral-ink)}
+.excl-details .note{margin-top:10px}
+.crow.crow-excl{grid-template-columns:auto minmax(160px,1.4fr) 1fr minmax(180px,1.6fr) auto;border-left-color:var(--line-2);background:#fff;opacity:.92;margin-top:10px}
+.crow.crow-excl .crow-name{color:var(--ink-3)}
+.excl-tag{font-size:10px;font-weight:800;padding:3px 9px;border-radius:20px;background:var(--bad-bg);color:var(--bad);text-transform:uppercase;letter-spacing:.03em;text-align:center;line-height:1.35;max-width:130px;align-self:center}
+.excl-reason{color:var(--mut);font-style:italic}
+
+/* szerkeszthető lekérdezés-sorok + célpiac-térkép sorok */
+.q-row{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:start;margin-bottom:8px}
+.q-row .q-plat{grid-column:1/-1;margin-bottom:2px}
+.q-edit{width:100%;resize:vertical;line-height:1.5;margin:0}
+.q-add{margin-top:6px;display:flex;gap:6px;flex-wrap:wrap}
+.q-add .ed-in{flex:1}
+.tm-row{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;border-bottom:1px solid var(--divider);padding:8px 0}
+.tm-row:last-of-type{border-bottom:none}
+
+/* stratégia-asszisztens chat */
+.sys-prompt{white-space:pre-wrap;font-family:ui-monospace,SFMono-Regular,monospace;font-size:11.5px;line-height:1.6;background:var(--navy);color:rgba(255,255,255,.86);border-radius:9px;padding:12px 14px;margin:8px 0 0;overflow-x:auto}
+.chat-log{display:flex;flex-direction:column;gap:9px;max-height:340px;overflow-y:auto;margin-top:14px;padding:4px 2px}
+.chat-empty{font-size:12.5px;color:var(--mut);background:#F8F6F1;border-radius:10px;padding:12px 14px;line-height:1.6}
+.chat-msg{max-width:82%;font-size:13px;line-height:1.55;border-radius:12px;padding:10px 13px}
+.chat-msg.user{align-self:flex-end;background:var(--accent-soft);color:var(--ink);border-bottom-right-radius:4px}
+.chat-msg.bot{align-self:flex-start;background:#fff;border:1px solid var(--line);color:var(--ink-2);border-bottom-left-radius:4px}
+.chat-msg.bot.undone{opacity:.62}
+.chat-acts,.chat-props{display:flex;flex-wrap:wrap;gap:5px;margin-top:8px}
+.chat-act{font-size:11px;font-weight:700;padding:3px 9px;border-radius:20px;background:#F1EEE6;color:var(--ink-3)}
+.chat-act.add{background:var(--good-bg);color:var(--good)}
+.chat-act.rm{background:var(--bad-bg);color:var(--bad)}
+.chat-act.gen{background:var(--tint-blue);color:var(--dot-blue)}
+.chat-prop{border-style:dashed}
+.chat-undo{padding:3px 9px;font-size:11.5px;margin-top:8px}
+.chat-undone-lbl{font-size:11px;color:var(--mut);margin-top:6px;font-style:italic}
+.chat-quick{display:flex;flex-wrap:wrap;gap:6px;margin-top:12px}
+.chat-quick .ck-mini{font-weight:600}
+
+/* keskenyebb munkaterületen a kizárt sor flex-be vált, hogy ne csorduljon túl */
+@media(max-width:1240px){
+  .crow.crow-excl{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px}
+  .crow.crow-excl>div{min-width:0}
+  .crow.crow-excl .excl-reason{flex:1 1 100%}
+  .crow.crow-excl .excl-back{margin-left:auto}
+}
+@media(max-width:980px){
+  .bf-lists{grid-template-columns:1fr}
+  .chat-msg{max-width:100%}
+}

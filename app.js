@@ -10,6 +10,7 @@ const state = {
   orOpen: null,        // megkeresés-szerkesztőben nyitott jelölt
   drawerId: null,      // jelölt-részletpanelben nyitott jelölt
   newEngStep: 0,       // 0 = zárva, 1 = alapadatok, 2 = brief
+  openExcluded: false, // a kizárt jelöltek sávja nyitva nyíljon-e
 };
 
 // ── Kliens-oldali megbízás-tár (localStorage) ───────────────────────────
@@ -40,6 +41,13 @@ function migrate(p) {
   if (!p.status) p.status = (p.candidates || []).length ? "Kutatás folyamatban" : "Előkészítés";
   if (!p.priority_overrides) p.priority_overrides = {};
   if (p.intake_review === undefined) p.intake_review = null;
+  if (p.brief_final === undefined) p.brief_final = null;
+  if (!p.exclusions) p.exclusions = {};
+  if (!p.exclusions.companies) p.exclusions.companies = [];
+  if (!p.exclusions.candidates) p.exclusions.candidates = {};
+  if (!p.exclusions.client_aliases) p.exclusions.client_aliases = [];
+  if (p.exclusions.allow_alumni === undefined) p.exclusions.allow_alumni = false;
+  if (!p.strategy_chat) p.strategy_chat = [];
   if (!p.outreach_status) p.outreach_status = {};
   if (!p.outreach) p.outreach = {};
   if (!p.attraction) p.attraction = {};
@@ -69,7 +77,9 @@ function emptyProjectJS(id, name) {
   return migrate({
     id, name: name || id,
     created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
-    brief_raw: "", intake: null, query: null, candidates: [], talent_map: null,
+    brief_raw: "", intake: null, brief_final: null, query: null, candidates: [], talent_map: null,
+    exclusions: { companies: [], candidates: {}, allow_alumni: false, client_aliases: [] },
+    strategy_chat: [],
     assessments: {}, ranking: null, attraction: {}, outreach: {}, outreach_status: {},
     baseline_response_rate: null, first_shortlist_at: null,
     pilot: { cooling_days: 7, mono_source_threshold: 0.7 },
@@ -159,11 +169,122 @@ function shorten(s, n) { s = String(s || ""); return s.length > n ? s.slice(0, n
 function list(items) { return `<ul class="klist">${(items || []).map((i) => `<li>${esc(i)}</li>`).join("")}</ul>`; }
 function chips(items, cls) { return `<div class="chips">${(items || []).map((i) => `<span class="chip ${cls || ""}">${esc(i)}</span>`).join("")}</div>`; }
 function tierLetter(t) { const s = String(t || ""); return s.startsWith("A") ? "A" : s.startsWith("B") ? "B" : s.startsWith("D") ? "D" : "C"; }
+
+// ── Szerkeszthető lista (chip + törlés + hozzáadás) ─────────────────────
+// Mindenhol ez adja a „vegyél hozzá / vegyél el” interakciót: brief-feltételek,
+// keresési terv kategóriái, célpiac-térkép elemei.
+function chipEditor(id, items, opts) {
+  opts = opts || {};
+  const label = (v) => (v && typeof v === "object" ? (v.name || v.query || "") : String(v == null ? "" : v));
+  const body = (items || []).map((v, i) =>
+    `<span class="ed-chip ${opts.cls || ""}">${esc(label(v))}<button class="ed-x" data-i="${i}" title="Eltávolítás" aria-label="Eltávolítás">×</button></span>`).join("");
+  return `<div class="ed-list" id="${id}">${body || `<span class="ed-empty">${esc(opts.empty || "— még üres —")}</span>`}
+    <span class="ed-add"><input class="ed-in" placeholder="${esc(opts.placeholder || "Új elem… (vesszővel több is)")}" aria-label="${esc(opts.placeholder || "Új elem")}" /><button class="btn ed-plus" title="Hozzáadás">+</button></span></div>`;
+}
+// onAdd: string[] · onRemove: index. A hívó a végén újrarendereli a nézetet.
+function wireChipEditor(id, onAdd, onRemove) {
+  const root = $("#" + id);
+  if (!root) return;
+  $$(".ed-x", root).forEach((b) => (b.onclick = (e) => { e.preventDefault(); onRemove(Number(b.dataset.i)); }));
+  const inp = $(".ed-in", root), plus = $(".ed-plus", root);
+  const commit = () => {
+    const vals = inp.value.split(",").map((s) => s.trim()).filter(Boolean);
+    if (!vals.length) return;
+    inp.value = "";
+    onAdd(vals);
+  };
+  if (plus) plus.onclick = (e) => { e.preventDefault(); commit(); };
+  if (inp) inp.onkeydown = (e) => { if (e.key === "Enter") { e.preventDefault(); commit(); } };
+}
+// A lenyíló blokkok nyitottsága túléli az újrarendert (a szerkesztés közben
+// becsukódó panel a leggyakoribb apró bosszúság).
+const openDetails = {};
+function detailsOpen(id) { return openDetails[id] ? " open" : ""; }
+function wireDetails(id) {
+  const d = $("#" + id);
+  if (d) d.ontoggle = () => { openDetails[id] = d.open; };
+}
+// Szerkesztés után: mentés, újrarender, és a fókusz visszaáll az input mezőre.
+function afterChipEdit(renderFn, p, listId) {
+  persist();
+  renderFn(p);
+  const i = $("#" + listId + " .ed-in");
+  if (i) i.focus();
+}
+// Listaelem-azonosítás (címek, szinonimák, lekérdezések) — a cégnév-specifikus
+// normCo-tól külön, mert az utótag-szűrés a szakmai kifejezéseket megcsonkítaná.
+function normVal(v) {
+  const s = v && typeof v === "object" ? (v.name || v.query || "") : v;
+  return String(s == null ? "" : s).toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/\s+/g, " ").trim();
+}
+function addUnique(arr, vals) {
+  let n = 0;
+  (vals || []).forEach((v) => { if (!arr.some((x) => normVal(x) === normVal(v))) { arr.push(v); n++; } });
+  return n;
+}
 function srcLabel(s) {
   return { linkedin: "LinkedIn", github: "GitHub", synthetic: "Mintaadat", web: "Web", blog: "Blog", community: "Közösség", xing: "Xing", stackoverflow: "StackOverflow", social: "Social", "egyéb": "Egyéb" }[s] || (s || "Egyéb");
 }
 function sentiLabel(s) { return { "pozitív": "pozitív válasz", "semleges": "semleges válasz", "negatív": "negatív válasz" }[s] || s; }
 function sentiChip(s) { const m = { "pozitív": "good", "semleges": "warn", "negatív": "bad" }; return `<span class="chip ${m[s] || ""}">${esc(sentiLabel(s))}</span>`; }
+
+/* ── KIZÁRÁSI MOTOR (ügyfél saját emberei + off-limits cégek) ────────────
+   A hiring manager a saját (volt) munkatársait ismeri — ha ilyen név kerül a
+   listára, az egész merítés hitelét viszi. A szabály nem törli a találatot
+   (a néma törlés is bizalomvesztés), hanem külön sávra teszi, megindokolja,
+   és a recruiter egy kattintással visszahozhatja.                          */
+const CO_NOISE = /\b(kft|zrt|bt|nyrt|kkt|rt|ltd|limited|inc|llc|plc|gmbh|ag|sa|nv|bv|oy|ab|as|sp|zoo|co|company|group|holding|technologies|technology|tech|solutions|services|systems|software|labs|digital|international|hungary|magyarorszag|europe)\b/g;
+function normCo(s) {
+  return String(s == null ? "" : s).toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "")
+    .replace(/[()\[\]{}.,\/&+'"’`|-]/g, " ").replace(CO_NOISE, " ").replace(/\s+/g, " ").trim();
+}
+// Két cégnév ugyanazt a céget jelöli-e (token-halmaz alapú, ragok/utótagok nélkül).
+function coMatch(a, b) {
+  const x = normCo(a), y = normCo(b);
+  if (x.length < 3 || y.length < 3) return false;
+  if (x === y) return true;
+  const tx = x.split(" ").filter((t) => t.length > 2), ty = y.split(" ").filter((t) => t.length > 2);
+  if (!tx.length || !ty.length) return false;
+  return ty.every((t) => tx.includes(t)) || tx.every((t) => ty.includes(t));
+}
+function clientNames(p) {
+  return [((p.position || {}).client || ""), ...((p.exclusions || {}).client_aliases || [])].filter(Boolean);
+}
+// null = a merítésben marad. Egyébként { kind, label, detail, soft }.
+function exclusionFor(p, c) {
+  if (!p || !c) return null;
+  const ex = p.exclusions || {};
+  const man = (ex.candidates || {})[c.id];
+  if (man && man.state === "include") return null;                       // recruiter: mégis vigyük
+  if (man && man.state === "exclude") return { kind: "manual", label: "Kézzel kizárva", detail: man.reason || "A recruiter vette ki a merítésből." };
+  const cur = c.current_company || "", past = c.past_companies || [];
+  for (const cn of clientNames(p)) {
+    if (coMatch(cur, cn)) return { kind: "client_current", label: "Az ügyfélnél dolgozik", detail: `Jelenlegi munkahelye: ${cur} — ez az ügyfél (${cn}).` };
+  }
+  for (const cn of clientNames(p)) {
+    for (const pc of past) if (coMatch(pc, cn)) return { kind: "client_alumni", label: "Korábban az ügyfélnél dolgozott", detail: `Volt munkahelye: ${pc} — az ügyfél ismeri.`, soft: true };
+  }
+  for (const o of ex.companies || []) {
+    if (coMatch(cur, o)) return { kind: "offlimits", label: "Off-limits cég", detail: `${cur} szerepel a kizárt cégek között.` };
+    for (const pc of past) if (coMatch(pc, o)) return { kind: "offlimits_past", label: "Off-limits cégnél dolgozott", detail: `${pc} szerepel a kizárt cégek között.`, soft: true };
+  }
+  return null;
+}
+// A „soft” kizárás (alumni) feloldható egyetlen kapcsolóval a Célpiac nézetben.
+function isExcluded(p, c) {
+  const e = exclusionFor(p, c);
+  if (!e) return false;
+  if (e.soft && (p.exclusions || {}).allow_alumni) return false;
+  return true;
+}
+function activeCandidates(p) { return ((p && p.candidates) || []).filter((c) => !isExcluded(p, c)); }
+function excludedCandidates(p) { return ((p && p.candidates) || []).filter((c) => isExcluded(p, c)); }
+function setCandExclusion(p, id, state, reason) {
+  p.exclusions.candidates = p.exclusions.candidates || {};
+  if (state) p.exclusions.candidates[id] = { state, reason: reason || "", at: new Date().toISOString() };
+  else delete p.exclusions.candidates[id];
+  persist();
+}
 
 // A jelölt effektív prioritása: a recruiter felülbírálata győz az AI-javaslat felett.
 function effTier(p, id) {
@@ -195,6 +316,7 @@ function pipelineRows(p) {
     const tier = effTier(p, id);
     if (tier !== "A" && tier !== "B") continue;
     const cand = candById(p, id) || {};
+    if (isExcluded(p, cand)) continue;   // kizárt jelölt nem kerül a munkalistára
     const os = orState(p, id);
     rows.push({
       id, cand, tier, priority: F.prio(r),
@@ -210,10 +332,11 @@ function pipelineRows(p) {
 // ── Következő teendő (megbízásonként egy kiemelt lépés) ─────────────────
 function nextStep(p) {
   if (!p) return null;
-  const c = p.candidates || [];
+  const c = activeCandidates(p);
   if (!p.brief_raw && !p.intake) return { view: "pozicio", label: "Illeszd be a briefet, majd futtasd az elemzést", sub: "A megbízás a brief tisztázásával indul", cta: "Pozíció és brief" };
   if (!p.intake) return { view: "pozicio", label: "Brief elemzése", sub: "A brief megvan — kérj javasolt pozíció-összefoglalót", cta: "Pozíció és brief" };
   if (!c.length) {
+    if (p.intake_review !== "approved") return { view: "pozicio", label: "Véglegesítsd a briefet", sub: "Szerkeszd a javaslatot, és hagyd jóvá — erre épül a keresés", cta: "Pozíció és brief" };
     if (!p.query) return { view: "celpiac", label: "Keresési terv készítése", sub: "Ez adja a jelöltkutatás alapját", cta: "Célpiac" };
     return { view: "celpiac", label: "Jelöltkutatás indítása", sub: "A keresési terv kész — indíthatod a kutatást", cta: "Célpiac" };
   }
@@ -500,7 +623,7 @@ function renderOverview(p) {
   const v = $("#view-attekintes");
   const ns = nextStep(p);
   const ms = MILESTONES.map(([lbl, fn]) => `<span class="ms ${fn(p) ? "done" : ""}">${fn(p) ? "✓" : "○"} ${lbl}</span>`).join("");
-  const posSum = p.intake ? shorten(p.intake.reframed_brief, 220) : (p.brief_raw ? shorten(p.brief_raw, 220) : "Még nincs brief.");
+  const posSum = p.intake ? shorten(finalBriefText(p), 220) : (p.brief_raw ? shorten(p.brief_raw, 220) : "Még nincs brief.");
   v.innerHTML = `
     <div class="next-card">
       <div>
@@ -514,7 +637,7 @@ function renderOverview(p) {
       <div class="kpi-desc" style="margin-top:8px">Nem minden mérföldkő kötelező — bármelyik nézet bármikor megnyitható.</div></div>
     <div class="ov-grid">
       <div class="ov-col">
-        <div class="card"><h4>Pozíció röviden ${p.intake ? aiTag(p.intake_review === "approved") : ""}</h4><p>${esc(posSum)}</p>
+        <div class="card"><h4>${p.intake && p.intake_review === "approved" ? "Véglegesített brief" : "Pozíció röviden"} ${p.intake ? aiTag(p.intake_review === "approved") : ""}</h4><p>${esc(posSum)}</p>
           <div class="row" style="margin-top:6px"><button class="btn" id="ovToPoz">Pozíció és brief</button></div></div>
         <div id="ovAttention"></div>
       </div>
@@ -568,12 +691,15 @@ function renderAttentionBlock(p) {
   box.innerHTML = `<div class="stuck-grid">
     <div><div class="ck-sec-head sm"><h3>Hiányzó lépések</h3><span class="ck-sec-note">${blockers.length} jelölt</span></div>${bHtml}</div>
     <div><div class="ck-sec-head sm"><h3>Figyelmet igénylő jelöltek</h3><span class="ck-sec-note">régóta nincs rajtuk lépés</span></div>${cHtml}</div>
-  </div>`;
+  </div>
+  ${excludedCandidates(p).length ? `<div class="excl-banner sm"><span><b>${excludedCandidates(p).length} jelölt kizárva a merítésből</b> — az ügyfél jelenlegi vagy volt munkatársai, illetve off-limits cég.</span><button class="btn" id="ovExShow">Megnézem</button></div>` : ""}`;
   $$("#ovAttention .stuck-cta").forEach((btn) => (btn.onclick = () => btn.classList.contains("touch") ? touchCand(btn.dataset.id) : openDrawer(btn.dataset.id)));
+  const ovEx = $("#ovExShow");
+  if (ovEx) ovEx.onclick = () => { state.openExcluded = true; showView("jeloltek"); };
 }
 function renderCoverage(p) {
   const box = $("#ovCoverage"); if (!box) return;
-  const c = p.candidates || [];
+  const c = activeCandidates(p);        // a lefedettséget a valódi merítésre mérjük
   if (!c.length) { box.innerHTML = ""; return; }
   const dist = {}; c.forEach((x) => { const k = x.source_type || "egyéb"; dist[k] = (dist[k] || 0) + 1; });
   const entries = Object.entries(dist).sort((a, b) => b[1] - a[1]);
@@ -630,63 +756,429 @@ function renderPositionView(p) {
   }));
   renderIntake(p);
 }
+// A véglegesített brief a recruiter tulajdona: az AI-javaslatból indul, de a
+// szerkesztett változat az, ami továbbmegy (keresés, megkeresés, ügyfél).
+function ensureBriefFinal(p) {
+  const o = p.intake || {};
+  if (!p.brief_final) {
+    p.brief_final = {
+      text: o.reframed_brief || "",
+      must_haves: [...(o.must_haves || [])],
+      nice_to_haves: [...(o.nice_to_haves || [])],
+      approved_at: null, edited: false,
+    };
+  }
+  return p.brief_final;
+}
+function briefIsEdited(p) {
+  const b = p.brief_final, o = p.intake || {};
+  if (!b) return false;
+  return b.text !== (o.reframed_brief || "")
+    || (b.must_haves || []).join("|") !== (o.must_haves || []).join("|")
+    || (b.nice_to_haves || []).join("|") !== (o.nice_to_haves || []).join("|");
+}
+function finalBriefText(p) { return (p.brief_final && p.brief_final.text) || (p.intake && p.intake.reframed_brief) || ""; }
+// A szerkesztőmező tartalmát minden újrarender előtt visszamentjük.
+function syncBriefText(p) {
+  const ta = $("#bfText");
+  if (ta && p.brief_final) p.brief_final.text = ta.value;
+}
 function renderIntake(p) {
   const o = p.intake;
   const out = $("#intakeOut");
   if (!o) { out.innerHTML = `<div class="ov-empty sm">Még nincs elemzés. Illeszd be a briefet, és kattints a „Brief elemzése” gombra.</div>`; return; }
+  const b = ensureBriefFinal(p);
+  const approved = p.intake_review === "approved";
+  const edited = briefIsEdited(p);
   out.innerHTML = `
-    <div class="card">
-      <h4>Javasolt pozíció-összefoglaló ${demoTag(o)} ${aiTag(p.intake_review === "approved")}</h4>
-      <p class="lead">${esc(o.reframed_brief)}</p>
-      ${p.intake_review !== "approved" ? `<div class="row" style="margin-top:8px"><button class="btn" id="intakeApprove">Jóváhagyás</button></div>` : ""}
+    <div class="card bf-card">
+      <h4>Véglegesített brief
+        <span class="ai-status ${approved ? "ok" : ""}">${approved ? "Recruiter által véglegesítve" : "Vázlat — még nincs véglegesítve"}</span>
+        ${edited ? `<span class="ev-tag inference">szerkesztve</span>` : ""}
+      </h4>
+      <p class="kpi-desc" style="margin-top:0">Ez a szöveg megy tovább a keresésbe, a megkeresésekbe és az ügyfél-egyeztetésbe. Szerkeszd szabadon, majd véglegesítsd.</p>
+      <textarea id="bfText" class="brief bf-text" placeholder="A véglegesített pozíció-összefoglaló…">${esc(b.text)}</textarea>
+      <div class="bf-lists">
+        <div><div class="cov-label">Elengedhetetlen feltételek</div>${chipEditor("bfMust", b.must_haves, { placeholder: "Új feltétel…" })}</div>
+        <div><div class="cov-label">Előnyt jelent</div>${chipEditor("bfNice", b.nice_to_haves, { placeholder: "Új előny…" })}</div>
+      </div>
+      <div class="row" style="margin-top:14px">
+        <button class="btn btn-primary" id="bfApprove">${approved ? "Módosítások mentése" : "Véglegesítés és jóváhagyás"}</button>
+        <button class="btn" id="bfCopy">Másolás</button>
+        <button class="btn btn-ghost" id="bfReset" title="Az AI eredeti javaslatának visszaállítása">Vissza az AI-javaslathoz</button>
+      </div>
+      ${approved && b.approved_at ? `<div class="kpi-desc">Véglegesítve: ${esc(String(b.approved_at).slice(0, 16).replace("T", " "))}${edited ? " · a recruiter módosította az AI-javaslatot" : ""}</div>` : ""}
     </div>
     <div class="card">
-      <h4>Elengedhetetlen feltételek</h4>${list(o.must_haves)}
-      <h4 style="margin-top:10px">Előnyt jelent</h4>${chips(o.nice_to_haves)}
+      <h4>Az AI eredeti javaslata ${demoTag(o)}</h4>
+      <p class="lead">${esc(o.reframed_brief)}</p>
+      <details class="or-why" style="margin-top:8px"><summary>Eredeti feltétel-listák</summary>
+        <h4 style="margin-top:8px">Elengedhetetlen feltételek</h4>${list(o.must_haves)}
+        <h4 style="margin-top:10px">Előnyt jelent</h4>${chips(o.nice_to_haves)}
+      </details>
     </div>
     ${F.clarif(o).length ? `<div class="card"><h4>Tisztázandó pontok</h4>${F.clarif(o).map((f) => `<div class="flag">${esc(f)}</div>`).join("")}</div>` : ""}
     ${F.inferred(o).length ? `<div class="card"><h4>Feltételezett további igények <span class="ev-tag assume">Ellenőrizendő feltételezés</span></h4>${list(F.inferred(o))}</div>` : ""}
     ${(o.search_hypotheses || []).length ? `<div class="card"><h4>Keresési hipotézisek</h4>${list(o.search_hypotheses)}</div>` : ""}
   `;
-  const ap = $("#intakeApprove");
-  if (ap) ap.onclick = () => { p.intake_review = "approved"; persist(); renderIntake(p); toast("Összefoglaló jóváhagyva."); };
+  $("#bfText").oninput = () => { b.text = $("#bfText").value; };
+  $("#bfText").onchange = () => { b.text = $("#bfText").value; persist(); };
+  wireChipEditor("bfMust",
+    (vals) => { syncBriefText(p); addUnique(b.must_haves, vals); afterChipEdit(renderIntake, p, "bfMust"); },
+    (i) => { syncBriefText(p); b.must_haves.splice(i, 1); afterChipEdit(renderIntake, p, "bfMust"); });
+  wireChipEditor("bfNice",
+    (vals) => { syncBriefText(p); addUnique(b.nice_to_haves, vals); afterChipEdit(renderIntake, p, "bfNice"); },
+    (i) => { syncBriefText(p); b.nice_to_haves.splice(i, 1); afterChipEdit(renderIntake, p, "bfNice"); });
+  $("#bfApprove").onclick = () => {
+    syncBriefText(p);
+    if (!b.text.trim()) return toast("A véglegesített brief nem lehet üres.");
+    b.approved_at = new Date().toISOString();
+    b.edited = briefIsEdited(p);
+    p.intake_review = "approved";
+    persist();
+    renderIntake(p);
+    renderEngHeader(p);
+    toast(b.edited ? "Brief véglegesítve a te módosításaiddal." : "Brief véglegesítve.");
+  };
+  $("#bfCopy").onclick = () => {
+    syncBriefText(p);
+    const txt = [b.text, "", "Elengedhetetlen: " + (b.must_haves || []).join("; "), "Előnyt jelent: " + (b.nice_to_haves || []).join("; ")].join("\n");
+    navigator.clipboard.writeText(txt);
+    toast("Véglegesített brief a vágólapon.");
+  };
+  $("#bfReset").onclick = () => {
+    if (!confirm("Biztosan visszaállítod az AI eredeti javaslatát? A kézi módosításaid elvesznek.")) return;
+    p.brief_final = null;
+    p.intake_review = null;
+    ensureBriefFinal(p);
+    persist();
+    renderIntake(p);
+    toast("Visszaállítva az AI-javaslatra.");
+  };
 }
 
 // ── CÉLPIAC ─────────────────────────────────────────────────────────────
 function renderCelpiac(p) {
   renderQuery(p);
+  renderExclusions(p);
   renderTalent(p);
+  renderStrategyChat(p);
   $("#discoverNote").innerHTML = p.discover_note ? `<div class="note">${esc(p.discover_note)}</div>` : "";
+  const qb = $("#queryBtn");
+  if (qb) qb.textContent = p.query ? "Keresési terv frissítése" : "Keresési terv készítése";
+  const tb = $("#talentBtn");
+  if (tb) tb.textContent = p.talent_map ? "Célpiac-térkép frissítése" : "Célpiac-térkép";
   if (!p.intake && !p.query) {
     $("#queryOut").innerHTML = `<div class="dep-note"><span>A keresési tervhez előbb elemezd a briefet.</span><button class="btn" id="depToPoz">Pozíció és brief</button></div>`;
     const b = $("#depToPoz"); if (b) b.onclick = () => showView("pozicio");
   }
 }
+// A terv minden kategóriája szerkeszthető: hozzáadás és elvétel egyaránt.
 function renderQuery(p) {
   const o = p.query;
   const out = $("#queryOut");
   if (!o) { if (p.intake) out.innerHTML = ""; return; }
+  const edited = !!o._edited_by_recruiter;
   out.innerHTML = `
     <div class="card">
-      <h4>Keresési terv ${demoTag(o)}</h4>
-      ${(o.target_titles || []).length ? `<h4 style="margin-top:4px">Célpozíciók</h4>${chips(o.target_titles)}` : ""}
-      ${(o.target_companies || []).length ? `<h4 style="margin-top:8px">Célcégek</h4>${chips(o.target_companies)}` : ""}
-      ${(o.synonyms || []).length ? `<h4 style="margin-top:8px">Kulcs-szinonimák</h4>${chips(o.synonyms)}` : ""}
-      <details class="or-why" style="margin-top:10px"><summary>Keresési lekérdezések (részletek)</summary>
-        ${(o.boolean_queries || []).map((q) => `<div class="q-plat">${esc(q.platform)}</div><code class="q-code">${esc(q.query)}</code>`).join("")}
-        <h4 style="margin-top:8px">Webes kereső-lekérdezések</h4>
-        ${(o.firecrawl_search_queries || []).map((q) => `<code class="q-code">${esc(q)}</code>`).join("")}
+      <h4>Keresési terv ${demoTag(o)} ${edited ? `<span class="ai-status ok">Recruiter által szerkesztve</span>` : `<span class="ai-status">AI-javaslat — szerkeszthető</span>`}</h4>
+      <p class="kpi-desc" style="margin-top:0">A kategóriákhoz bármikor hozzáadhatsz vagy elvehetsz belőlük — a frissítés nem törli a kézi elemeidet.</p>
+      <div class="cov-label" style="margin-top:10px">Célpozíciók</div>${chipEditor("qTitles", o.target_titles, { placeholder: "Új célpozíció…" })}
+      <div class="cov-label" style="margin-top:12px">Célcégek</div>${chipEditor("qCompanies", o.target_companies, { placeholder: "Új célcég…" })}
+      <div class="cov-label" style="margin-top:12px">Kulcs-szinonimák</div>${chipEditor("qSyn", o.synonyms, { placeholder: "Új szinonima…" })}
+      <details class="or-why" id="qDetails"${detailsOpen("qDetails")} style="margin-top:12px"><summary>Keresési lekérdezések (szerkeszthető)</summary>
+        <div class="cov-label" style="margin-top:8px">Boolean / X-ray lekérdezések</div>
+        ${(o.boolean_queries || []).map((q, i) => `<div class="q-row"><div class="q-plat">${esc(q.platform || "egyéb")}</div><textarea class="q-code q-edit" data-qi="${i}" rows="2">${esc(q.query || "")}</textarea><button class="btn ed-x-btn" data-qrm="${i}" title="Lekérdezés törlése">×</button></div>`).join("")
+          || `<div class="ed-empty">— még nincs lekérdezés —</div>`}
+        <div class="ed-add q-add"><input class="ed-in" id="qBoolNew" placeholder="Új boolean lekérdezés…" /><button class="btn" id="qBoolAdd">+</button></div>
+        <div class="cov-label" style="margin-top:14px">Webes kereső-lekérdezések</div>
+        ${chipEditor("qWeb", o.firecrawl_search_queries, { placeholder: "Új webes lekérdezés…" })}
       </details>
     </div>`;
+  wireDetails("qDetails");
+  const touch = () => { o._edited_by_recruiter = true; };
+  // Minden kategória ugyanazt a szerződést kapja: hozzáadás + elvétel, és az
+  // elvétel emlékezetes (a frissítés nem hozza vissza).
+  const wireQ = (id, field) => wireChipEditor(id,
+    (v) => { touch(); o[field] = o[field] || []; addUnique(o[field], v); v.forEach((x) => unnoteRemoval(o, field, x)); afterChipEdit(renderCelpiac, p, id); },
+    (i) => { touch(); noteRemoval(o, field, (o[field] || [])[i]); o[field].splice(i, 1); afterChipEdit(renderCelpiac, p, id); });
+  wireQ("qTitles", "target_titles");
+  wireQ("qCompanies", "target_companies");
+  wireQ("qSyn", "synonyms");
+  wireQ("qWeb", "firecrawl_search_queries");
+  $$("#queryOut .q-edit").forEach((ta) => (ta.onchange = () => { touch(); o.boolean_queries[Number(ta.dataset.qi)].query = ta.value; persist(); }));
+  $$("#queryOut [data-qrm]").forEach((b) => (b.onclick = () => {
+    touch();
+    const i = Number(b.dataset.qrm);
+    noteRemoval(o, "boolean_queries", (o.boolean_queries[i] || {}).query);
+    o.boolean_queries.splice(i, 1);
+    persist();
+    renderCelpiac(p);
+  }));
+  const qAdd = $("#qBoolAdd");
+  if (qAdd) qAdd.onclick = () => {
+    const v = $("#qBoolNew").value.trim();
+    if (!v) return;
+    touch();
+    o.boolean_queries = o.boolean_queries || [];
+    o.boolean_queries.push({ platform: "egyéni", query: v });
+    persist();
+    renderCelpiac(p);
+  };
 }
+
+// ── Kizárt cégek és jelöltek (off-limits) ───────────────────────────────
+function renderExclusions(p) {
+  const out = $("#exclOut");
+  if (!out) return;
+  if (!p.query && !(p.candidates || []).length) { out.innerHTML = ""; return; }
+  const ex = p.exclusions;
+  const client = (p.position || {}).client;
+  const excl = excludedCandidates(p);
+  const byKind = {};
+  excl.forEach((c) => { const k = (exclusionFor(p, c) || {}).kind || "manual"; byKind[k] = (byKind[k] || 0) + 1; });
+  const kindLbl = { client_current: "az ügyfélnél dolgozik", client_alumni: "volt ügyfél-munkatárs", offlimits: "off-limits cég", offlimits_past: "off-limits múlt", manual: "kézzel kizárva" };
+  const sum = Object.entries(byKind).map(([k, v]) => `${v} ${kindLbl[k] || k}`).join(" · ");
+  out.innerHTML = `
+    <div class="card excl-card">
+      <h4>Kizárás a merítésből ${excl.length ? `<span class="cov-flag">${excl.length} jelölt kiszűrve</span>` : `<span class="cov-ok">nincs ütközés</span>`}</h4>
+      <p class="kpi-desc" style="margin-top:0">${client
+        ? `Az ügyfél (<b>${esc(client)}</b>) jelenlegi és volt munkatársai nem kerülnek a jelöltlistára — őket a hiring manager ismeri. A cégnév-egyezés a leányvállalati és rövidített alakokat is felismeri.`
+        : `Add meg az ügyfél nevét a <b>Pozíció és brief</b> nézetben, hogy a saját munkatársai automatikusan kimaradjanak.`}</p>
+      ${sum ? `<div class="excl-sum">${esc(sum)}</div>` : ""}
+      <div class="cov-label" style="margin-top:12px">További kizárt cégek (off-limits)</div>
+      ${chipEditor("exCos", ex.companies, { cls: "bad", placeholder: "pl. testvércég, másik ügyfél…", empty: "— nincs további kizárt cég —" })}
+      ${(ex.client_aliases || []).length || client ? `<div class="cov-label" style="margin-top:12px">Az ügyfél további cégnevei</div>${chipEditor("exAlias", ex.client_aliases, { placeholder: "pl. leányvállalat neve…", empty: "— nincs megadva —" })}` : ""}
+      <label class="excl-toggle"><input type="checkbox" id="exAlumni" ${ex.allow_alumni ? "checked" : ""} />
+        <span>A volt ügyfél-munkatársak (alumni) jelenjenek meg a listán — jelöléssel, ha szándékosan visszacsábítanátok valakit</span></label>
+      ${excl.length ? `<div class="row" style="margin-top:10px"><button class="btn" id="exShow">Kizárt jelöltek megnyitása (${excl.length})</button></div>` : ""}
+    </div>`;
+  wireChipEditor("exCos",
+    (v) => { addUnique(ex.companies, v); afterChipEdit(renderCelpiac, p, "exCos"); },
+    (i) => { ex.companies.splice(i, 1); afterChipEdit(renderCelpiac, p, "exCos"); });
+  wireChipEditor("exAlias",
+    (v) => { addUnique(ex.client_aliases, v); afterChipEdit(renderCelpiac, p, "exAlias"); },
+    (i) => { ex.client_aliases.splice(i, 1); afterChipEdit(renderCelpiac, p, "exAlias"); });
+  const al = $("#exAlumni");
+  if (al) al.onchange = () => { ex.allow_alumni = al.checked; persist(); renderCelpiac(p); toast(al.checked ? "Az alumni jelöltek megjelennek a listán." : "Az alumni jelöltek kikerültek a listáról."); };
+  const sh = $("#exShow");
+  if (sh) sh.onclick = () => { state.openExcluded = true; showView("jeloltek"); };
+}
+
 function renderTalent(p) {
   const o = p.talent_map;
   const out = $("#talentOut");
   if (!o) { out.innerHTML = ""; return; }
-  out.innerHTML = `<div class="card"><h4>Célpiac-térkép ${demoTag(o)}</h4>
-    ${(o.target_companies || []).map((c) => `<div class="rank-body" style="margin-bottom:8px"><span class="rank-name">${esc(c.name)}</span> — ${esc(c.why)} ${chips(c.likely_roles)}</div>`).join("")}
-    ${(o.where_they_gather || []).length ? `<h4 style="margin-top:6px">Közösségek, rendezvények</h4>${chips(o.where_they_gather)}` : ""}
+  const edited = !!o._edited_by_recruiter;
+  const touch = () => { o._edited_by_recruiter = true; };
+  out.innerHTML = `<div class="card"><h4>Célpiac-térkép ${demoTag(o)} ${edited ? `<span class="ai-status ok">Recruiter által szerkesztve</span>` : ""}</h4>
+    <div class="cov-label">Célcégek</div>
+    ${(o.target_companies || []).map((c, i) => `<div class="tm-row"><div><span class="rank-name">${esc(c.name)}</span>${c.why ? ` — <span class="crow-meta">${esc(c.why)}</span>` : ""}${(c.likely_roles || []).length ? chips(c.likely_roles) : ""}</div><button class="btn ed-x-btn" data-tmrm="${i}" title="Eltávolítás">×</button></div>`).join("")
+      || `<div class="ed-empty">— még nincs célcég —</div>`}
+    <div class="ed-add q-add"><input class="ed-in" id="tmNewName" placeholder="Célcég neve…" /><input class="ed-in" id="tmNewWhy" placeholder="Miért releváns? (opcionális)" /><button class="btn" id="tmAdd">+</button></div>
+    ${(o.competitor_clusters || []).length || true ? `<div class="cov-label" style="margin-top:14px">Versenytárs-klaszterek</div>${chipEditor("tmClusters", o.competitor_clusters, { placeholder: "Új klaszter…" })}` : ""}
+    <div class="cov-label" style="margin-top:12px">Közösségek, rendezvények</div>${chipEditor("tmGather", o.where_they_gather, { placeholder: "Új közösség / rendezvény…" })}
   </div>`;
+  $$("#talentOut [data-tmrm]").forEach((b) => (b.onclick = () => { touch(); o.target_companies.splice(Number(b.dataset.tmrm), 1); persist(); renderCelpiac(p); }));
+  const add = $("#tmAdd");
+  if (add) add.onclick = () => {
+    const name = $("#tmNewName").value.trim();
+    if (!name) return toast("Adj meg cégnevet.");
+    touch();
+    o.target_companies = o.target_companies || [];
+    o.target_companies.push({ name, why: $("#tmNewWhy").value.trim() || "A recruiter vette fel.", likely_roles: [] });
+    persist();
+    renderCelpiac(p);
+  };
+  wireChipEditor("tmClusters",
+    (v) => { touch(); addUnique(o.competitor_clusters = o.competitor_clusters || [], v); afterChipEdit(renderCelpiac, p, "tmClusters"); },
+    (i) => { touch(); o.competitor_clusters.splice(i, 1); afterChipEdit(renderCelpiac, p, "tmClusters"); });
+  wireChipEditor("tmGather",
+    (v) => { touch(); addUnique(o.where_they_gather = o.where_they_gather || [], v); afterChipEdit(renderCelpiac, p, "tmGather"); },
+    (i) => { touch(); o.where_they_gather.splice(i, 1); afterChipEdit(renderCelpiac, p, "tmGather"); });
+}
+
+/* ── STRATÉGIA-ASSZISZTENS ───────────────────────────────────────────────
+   Szűk hatókörű chat: a rendszer-promptja szerint kizárólag a keresési tervet
+   és a célpiac-térképet szerkeszti. Nem „beszélget” — műveleteket hajt végre,
+   tételesen visszajelzi őket, és minden lépés visszavonható.               */
+const STRAT_QUICK = [
+  "Milyen célcégeket javasolsz még?",
+  "Adj hozzá a célpozíciókhoz: Backend Architect, Head of Platform",
+  "Vedd ki a szinonimák közül az SRE-t",
+  "Zárd ki: (az ügyfél leányvállalata)",
+  "Készíts célpiac-térképet",
+];
+function strategyList(p, target, field) {
+  if (target === "query") { p.query = p.query || {}; return (p.query[field] = p.query[field] || []); }
+  if (target === "map") { p.talent_map = p.talent_map || {}; return (p.talent_map[field] = p.talent_map[field] || []); }
+  if (target === "exclusions") { return (p.exclusions[field] = p.exclusions[field] || []); }
+  return [];
+}
+function sameStratVal(a, b) { return normVal(a) === normVal(b); }
+/* A kézi TÖRLÉS is szerkesztés: ha a recruiter kivett egy kategóriát, a terv
+   frissítése nem hozhatja vissza csendben. Ezt tartja nyilván a _removed. */
+function noteRemoval(q, field, value) {
+  if (!q) return;
+  q._removed = q._removed || {};
+  const s = (q._removed[field] = q._removed[field] || []);
+  if (!s.some((x) => sameStratVal(x, value))) s.push(normVal(value));
+}
+function unnoteRemoval(q, field, value) {
+  const s = q && q._removed && q._removed[field];
+  if (!s) return;
+  const i = s.findIndex((x) => sameStratVal(x, value));
+  if (i >= 0) s.splice(i, 1);
+}
+function wasRemoved(q, field, value) {
+  const s = q && q._removed && q._removed[field];
+  return !!(s && s.some((x) => sameStratVal(x, value)));
+}
+// invert=true → a művelet visszavonása. "generate" esetén a hívó futtatja az endpointot.
+function applyStratAction(p, a, invert) {
+  const op = invert ? (a.op === "add" ? "remove" : a.op === "remove" ? "add" : a.op) : a.op;
+  if (op === "generate") return invert ? null : a.target;
+  const arr = strategyList(p, a.target, a.field);
+  if (op === "add") {
+    if (!arr.some((x) => sameStratVal(x, a.value))) arr.push(a.value);
+    if (a.target === "query") unnoteRemoval(p.query, a.field, a.value);
+  } else if (op === "remove") {
+    const i = arr.findIndex((x) => sameStratVal(x, a.value));
+    if (i >= 0) arr.splice(i, 1);
+    if (a.target === "query") noteRemoval(p.query, a.field, a.value);
+  }
+  if (a.target === "query" && p.query) p.query._edited_by_recruiter = true;
+  if (a.target === "map" && p.talent_map) p.talent_map._edited_by_recruiter = true;
+  return null;
+}
+function actionChip(a) {
+  const sign = a.op === "remove" ? "−" : a.op === "generate" ? "⟳" : "+";
+  const cls = a.op === "remove" ? "rm" : a.op === "generate" ? "gen" : "add";
+  return `<span class="chat-act ${cls}">${sign} ${esc(a.label || "")}</span>`;
+}
+function renderStrategyChat(p) {
+  const box = $("#stratChat");
+  if (!box) return;
+  const keep = $("#chatIn") ? $("#chatIn").value : "";   // a félig begépelt üzenet nem veszhet el
+  const log = p.strategy_chat || [];
+  box.innerHTML = `<div class="stage">
+    <div class="stage-head"><h2>Stratégia-asszisztens</h2>
+      <p class="stage-sub">Írd le szövegesen, mit változtasson a keresési terven vagy a célpiac-térképen. Minden módosítás tételes és visszavonható — az asszisztens csak ehhez a két dologhoz nyúlhat.</p></div>
+    <details class="or-why" id="sysPromptBox"${detailsOpen("sysPromptBox")}><summary>Rendszer-prompt — mit tud és mit nem</summary>
+      <pre class="sys-prompt" id="sysPromptTxt">${esc(p.strategy_system_prompt || "Betöltés…")}</pre></details>
+    <div class="chat-log" id="chatLog">${log.length ? log.map((m, i) => {
+      if (m.role === "user") return `<div class="chat-msg user">${esc(m.text)}</div>`;
+      const acts = (m.actions || []).length ? `<div class="chat-acts">${m.actions.map(actionChip).join("")}</div>` : "";
+      // Az alkalmazott javaslat már a művelet-chipek közt van — itt csak a maradék.
+      const props = (m.proposals || []).map((x, j) => ({ x, j })).filter((o) => !o.x.applied);
+      const propHtml = props.length
+        ? `<div class="chat-props">${props.map((o) => `<button class="ck-mini chat-prop" data-mi="${i}" data-pi="${o.j}">+ ${esc(o.x.label)}</button>`).join("")}</div>` : "";
+      const undo = (m.actions || []).length && !m.undone
+        ? `<button class="btn btn-ghost chat-undo" data-mi="${i}">↺ Visszavonás</button>` : "";
+      return `<div class="chat-msg bot${m.undone ? " undone" : ""}"><div>${esc(m.text)}</div>${acts}${propHtml}
+        ${m.undone ? `<div class="chat-undone-lbl">visszavonva</div>` : undo}</div>`;
+    }).join("") : `<div class="chat-empty">Például: „Adj hozzá a célcégekhez: (nemzetközi PSP D)” · „Vedd ki a célpozíciók közül a Tech Lead-et” · „Milyen szinonimákat javasolsz?”</div>`}</div>
+    <div class="chat-quick">${STRAT_QUICK.map((q) => `<button class="ck-mini chat-q">${esc(q)}</button>`).join("")}</div>
+    <div class="row" style="margin-top:10px">
+      <input id="chatIn" class="brief-line" placeholder="Mit módosítsak a stratégián?" autocomplete="off" />
+      <button id="chatSend" class="btn btn-primary">Küldés</button>
+      ${log.length ? `<button id="chatClear" class="btn btn-ghost">Előzmény törlése</button>` : ""}
+    </div>
+  </div>`;
+  wireDetails("sysPromptBox");
+  if (keep) $("#chatIn").value = keep;
+  const logEl = $("#chatLog");
+  if (logEl) logEl.scrollTop = logEl.scrollHeight;
+  const send = () => {
+    const v = $("#chatIn").value.trim();
+    if (!v) return;
+    $("#chatIn").value = "";
+    sendStrategyChat(p, v);
+  };
+  $("#chatSend").onclick = send;
+  $("#chatIn").onkeydown = (e) => { if (e.key === "Enter") { e.preventDefault(); send(); } };
+  $$("#stratChat .chat-q").forEach((b) => (b.onclick = () => sendStrategyChat(p, b.textContent)));
+  $$("#stratChat .chat-undo").forEach((b) => (b.onclick = () => undoStratEntry(p, Number(b.dataset.mi))));
+  $$("#stratChat .chat-prop").forEach((b) => (b.onclick = () => applyProposal(p, Number(b.dataset.mi), Number(b.dataset.pi))));
+  const cl = $("#chatClear");
+  if (cl) cl.onclick = () => { p.strategy_chat = []; persist(); renderCelpiac(p); };
+  // A rendszer-prompt a szerverről jön (mint élesben) — első kinyitáskor kérjük le.
+  const sp = $("#sysPromptBox");
+  const loadSysPrompt = async () => {
+    if (!sp || !sp.open || p.strategy_system_prompt) return;
+    try {
+      const r = await api("POST", `/api/project/${p.id}/strategy-chat`, { message: "" });
+      p.strategy_system_prompt = r.system_prompt || "—";
+      persist();
+      const t = $("#sysPromptTxt");
+      if (t) t.textContent = p.strategy_system_prompt;
+    } catch (e) { /* a demóban nem blokkoló */ }
+  };
+  if (sp) { const prev = sp.ontoggle; sp.ontoggle = () => { if (prev) prev(); loadSysPrompt(); }; loadSysPrompt(); }
+}
+async function sendStrategyChat(p, msg) {
+  p.strategy_chat = p.strategy_chat || [];
+  p.strategy_chat.push({ role: "user", text: msg, ts: new Date().toISOString() });
+  persist();
+  renderStrategyChat(p);
+  const btn = $("#chatSend");   // az újrarender után kell lekérdezni
+  await withLoading(btn, async () => {
+    const res = await api("POST", `/api/project/${p.id}/strategy-chat`, { message: msg });
+    if (res.system_prompt) p.strategy_system_prompt = res.system_prompt;
+    const entry = { role: "assistant", text: res.reply || "", actions: [], proposals: (res.proposals || []).map((x) => ({ ...x, applied: false })), ts: new Date().toISOString() };
+    for (const a of res.actions || []) {
+      const gen = applyStratAction(p, a, false);
+      if (gen === "map") p.talent_map = await api("POST", `/api/project/${p.id}/talent-map`);
+      if (gen === "query") { const q = await api("POST", `/api/project/${p.id}/query`); p.query = mergeQueryPlan(p.query, q); }
+      entry.actions.push(a);
+    }
+    p.strategy_chat.push(entry);
+    persist();
+    renderCelpiac(p);
+    if (entry.actions.length) toast(`${entry.actions.length} módosítás alkalmazva a stratégián.`);
+  }).catch(() => { renderStrategyChat(p); });
+}
+function undoStratEntry(p, i) {
+  const m = (p.strategy_chat || [])[i];
+  if (!m || m.undone) return;
+  [...(m.actions || [])].reverse().forEach((a) => applyStratAction(p, a, true));
+  (m.proposals || []).forEach((x) => (x.applied = false));
+  m.undone = true;
+  persist();
+  renderCelpiac(p);
+  toast("Módosítás visszavonva.");
+}
+function applyProposal(p, mi, pi) {
+  const m = (p.strategy_chat || [])[mi];
+  const prop = m && (m.proposals || [])[pi];
+  if (!prop || prop.applied) return;
+  applyStratAction(p, prop, false);
+  prop.applied = true;
+  if (m.undone) {
+    // Visszavont bejegyzésbe nem írunk vissza — külön, önállóan visszavonható lépés lesz.
+    p.strategy_chat.push({ role: "assistant", text: `Alkalmaztam a javaslatot: ${prop.label}`, actions: [prop], proposals: [], ts: new Date().toISOString() });
+  } else {
+    m.actions = m.actions || [];
+    m.actions.push(prop);
+  }
+  persist();
+  renderCelpiac(p);
+  toast(`Hozzáadva: ${prop.label}`);
+}
+// Új AI-javaslat egyesítése a meglévő (kézzel szerkesztett) tervvel:
+// a kézi hozzáadások megmaradnak, a kézi törlések nem jönnek vissza.
+function mergeQueryPlan(oldQ, newQ) {
+  if (!oldQ) return newQ;
+  const out = { ...newQ };
+  ["target_titles", "target_companies", "synonyms", "firecrawl_search_queries", "exclude_companies"].forEach((k) => {
+    out[k] = (newQ[k] || []).filter((v) => !wasRemoved(oldQ, k, v));
+    addUnique(out[k], oldQ[k] || []);
+  });
+  out.boolean_queries = (newQ.boolean_queries || []).filter((q) => !wasRemoved(oldQ, "boolean_queries", q.query));
+  (oldQ.boolean_queries || []).forEach((q) => { if (!out.boolean_queries.some((x) => x.query === q.query)) out.boolean_queries.push(q); });
+  out._edited_by_recruiter = !!oldQ._edited_by_recruiter;
+  out._removed = oldQ._removed;
+  return out;
 }
 
 // ── JELÖLTEK ────────────────────────────────────────────────────────────
@@ -722,8 +1214,9 @@ function renderCandidatesView(p) {
     return;
   }
   const f = state.candFilter;
+  const act = activeCandidates(p), exc = excludedCandidates(p);
   const strongCount = (x) => (x.signals || []).filter((s) => s.strength === "erős").length;
-  const filtered = c.filter((x) => {
+  const filtered = act.filter((x) => {
     if (f.q && !`${x.name} ${x.headline} ${x.current_company} ${x.location}`.toLowerCase().includes(f.q)) return false;
     const t = effTier(p, x.id);
     if (f.prio === "none" && t) return false;
@@ -740,15 +1233,16 @@ function renderCandidatesView(p) {
   });
   const order = (x) => { const t = effTier(p, x.id); return { A: 0, B: 1, C: 2, D: 3 }[t] ?? 4; };
   filtered.sort((a, b) => order(a) - order(b) || strongCount(b) - strongCount(a));
-  const rankNote = p.ranking ? "" : `<div class="dep-note"><span>${c.length} jelölt még prioritás nélkül. A javaslatot te bírálhatod felül.</span><button class="btn btn-primary" id="rankBtn2">Prioritási javaslat készítése</button></div>`;
+  const rankNote = p.ranking ? "" : `<div class="dep-note"><span>${act.length} jelölt még prioritás nélkül. A javaslatot te bírálhatod felül.</span><button class="btn btn-primary" id="rankBtn2">Prioritási javaslat készítése</button></div>`;
   v.innerHTML = `<div class="stage">
     <div class="stage-head"><h2>Jelöltek</h2>
-      <p class="stage-sub">${c.length} jelölt · a prioritás a lista tulajdonsága — az AI-javaslatot bármikor felülírhatod.</p></div>
+      <p class="stage-sub">${act.length} jelölt a merítésben${exc.length ? ` · ${exc.length} kizárva` : ""} · a prioritás a lista tulajdonsága — az AI-javaslatot bármikor felülírhatod.</p></div>
+    ${exc.length ? `<div class="excl-banner"><span><b>${exc.length} jelölt nem került a listára.</b> Az ügyfél jelenlegi vagy volt munkatársai, illetve off-limits cégnél dolgozók — őket a hiring manager ismeri.</span><button class="btn" id="candExShow">Megnézem</button></div>` : ""}
     <div class="cand-toolbar">
       ${p.ranking ? `<button class="btn" id="rankBtn">Prioritási javaslat frissítése</button>` : ""}
       <select id="fPrio"><option value="">prioritás: mind</option><option value="A" ${f.prio === "A" ? "selected" : ""}>A</option><option value="B" ${f.prio === "B" ? "selected" : ""}>B</option><option value="C" ${f.prio === "C" ? "selected" : ""}>C</option><option value="D" ${f.prio === "D" ? "selected" : ""}>D</option><option value="none" ${f.prio === "none" ? "selected" : ""}>nincs prioritás</option></select>
       <select id="fState"><option value="">állapot: mind</option><option value="new" ${f.state === "new" ? "selected" : ""}>új</option><option value="noplan" ${f.state === "noplan" ? "selected" : ""}>nincs terv</option><option value="nodraft" ${f.state === "nodraft" ? "selected" : ""}>nincs vázlat</option><option value="sent" ${f.state === "sent" ? "selected" : ""}>kiküldve</option><option value="replied" ${f.state === "replied" ? "selected" : ""}>válaszolt</option></select>
-      <span class="mut" style="font-size:12px">${filtered.length}/${c.length} látható</span>
+      <span class="mut" style="font-size:12px">${filtered.length}/${act.length} látható</span>
     </div>
     ${rankNote}
     ${p.ranking && p.ranking.note ? `<div class="kpi-desc" style="margin:6px 0 2px">${esc(p.ranking.note)} ${demoTag(p.ranking)}</div>` : ""}
@@ -767,7 +1261,39 @@ function renderCandidatesView(p) {
         <button class="btn crow-open" data-id="${esc(x.id)}">Részletek</button>
       </div>`;
     }).join("") || `<div class="ov-empty sm">Nincs a szűrőknek megfelelő jelölt.</div>`}</div>
+    ${exc.length ? `<details class="excl-details" id="exclDetails" ${state.openExcluded ? "open" : ""}>
+      <summary>Kizárva a merítésből (${exc.length}) — indoklással, bármikor visszahozható</summary>
+      <div id="exclRows">${exc.map((x) => {
+        const e = exclusionFor(p, x) || {};
+        return `<div class="crow crow-excl" data-id="${esc(x.id)}">
+          <span class="excl-tag">${esc(e.label || "kizárva")}</span>
+          <div><div class="crow-name">${esc(x.name)}</div><div class="crow-head">${esc(x.headline || "")}</div></div>
+          <div class="crow-meta">${esc(x.current_company || "")}${x.location ? "<br>" + esc(x.location) : ""}</div>
+          <div class="crow-meta excl-reason">${esc(e.detail || "")}</div>
+          <button class="btn excl-back" data-id="${esc(x.id)}" title="Visszahozás a merítésbe">Mégis bevonom</button>
+        </div>`;
+      }).join("")}</div>
+      <div class="note">A kizárás nem törlés: a találat megmarad, csak nem kerül a munkalistára és a megkeresésekbe. A szabályokat a <b>Célpiac</b> nézetben állíthatod.</div>
+    </details>` : ""}
   </div>`;
+  if (state.openExcluded) {
+    state.openExcluded = false;
+    const d0 = $("#exclDetails");
+    if (d0) setTimeout(() => d0.scrollIntoView({ behavior: "smooth", block: "center" }), 30);
+  }
+  const exBtn = $("#candExShow");
+  if (exBtn) exBtn.onclick = () => {
+    const d = $("#exclDetails");
+    if (d) { d.open = true; d.scrollIntoView({ behavior: "smooth", block: "center" }); }
+  };
+  $$("#exclRows .excl-back").forEach((b) => (b.onclick = (e) => {
+    e.stopPropagation();
+    setCandExclusion(p, b.dataset.id, "include", "A recruiter szándékosan bevonta.");
+    state.openExcluded = true;
+    renderCandidatesView(p);
+    toast("Jelölt visszahozva a merítésbe.");
+  }));
+  $$("#exclRows .crow-excl").forEach((r) => (r.onclick = () => openDrawer(r.dataset.id)));
   const rb = $("#rankBtn") || $("#rankBtn2");
   if (rb) rb.onclick = (e) => withLoading(e.target, async () => {
     const r = await api("POST", `/api/project/${p.id}/rank`);
@@ -813,11 +1339,18 @@ function renderDrawer(p, c) {
   const s = orState(p, c.id);
   const t = effTier(p, c.id);
   const body = $("#candDrawerBody");
+  const exc = exclusionFor(p, c);
+  const man = (p.exclusions.candidates || {})[c.id];
   body.innerHTML = `
+    ${exc ? `<div class="excl-banner d"><div><b>${esc(exc.label)}</b><div class="crow-meta">${esc(exc.detail || "")}</div></div>
+      <button class="btn" id="dExInclude">Mégis bevonom</button></div>`
+      : man && man.state === "include" ? `<div class="excl-banner ok d"><div><b>Kizárás felülbírálva</b><div class="crow-meta">A recruiter szándékosan bevonta a merítésbe.</div></div>
+      <button class="btn btn-ghost" id="dExRevert">Vissza a kizártakhoz</button></div>` : ""}
     <div class="d-sec"><h5>Profil</h5>
       <div class="crow-name">${esc(c.name)}</div>
       <div class="crow-head">${esc(c.headline || "")}</div>
       <div class="crow-meta" style="margin-top:4px">${[c.current_company, c.location].filter(Boolean).map(esc).join(" · ")}</div>
+      ${(c.past_companies || []).length ? `<div class="crow-meta" style="margin-top:2px">Korábban: ${(c.past_companies || []).map(esc).join(" · ")}</div>` : ""}
       <div class="row" style="margin-top:8px">
         <label style="font-size:12px">Prioritás:</label>
         <select class="prio-sel" id="dPrio"><option value="">—</option>${["A", "B", "C", "D"].map((k) => `<option ${t === k ? "selected" : ""}>${k}</option>`).join("")}</select>
@@ -847,8 +1380,24 @@ function renderDrawer(p, c) {
     </div>
     <div class="d-sec"><h5>Aktivitás</h5>
       <div class="crow-meta">Utolsó lépés: ${relTime(c.last_touched)}${s.sent ? " · kiküldve" : ""}${s.replied ? " · " + esc(sentiLabel(s.sentiment)) : ""}</div>
-      <div class="row" style="margin-top:8px"><button class="btn" id="dTouch">Aktivitás rögzítése</button></div>
+      <div class="row" style="margin-top:8px"><button class="btn" id="dTouch">Aktivitás rögzítése</button>
+        ${!exc ? `<button class="btn btn-ghost" id="dExExclude" title="Kivétel a merítésből">Kizárom a merítésből</button>` : ""}</div>
     </div>`;
+  const dInc = $("#dExInclude");
+  if (dInc) dInc.onclick = () => { setCandExclusion(p, c.id, "include", "A recruiter szándékosan bevonta."); renderDrawer(p, c); render(state.view); toast("Jelölt bevonva a merítésbe."); };
+  const dRev = $("#dExRevert");
+  if (dRev) dRev.onclick = () => { setCandExclusion(p, c.id, null); renderDrawer(p, c); render(state.view); toast("Visszaállítva az alapértelmezett kizárási szabály."); };
+  const dExc = $("#dExExclude");
+  if (dExc) dExc.onclick = () => {
+    const r = prompt("Miért zárod ki ezt a jelöltet a merítésből? (opcionális)", "");
+    if (r === null) return;
+    setCandExclusion(p, c.id, "exclude", r);
+    renderDrawer(p, c);
+    // A jelölt nem tűnhet el nyomtalanul: nyitva mutatjuk, hova került.
+    state.openExcluded = true;
+    render(state.view);
+    toast("Jelölt kizárva a merítésből — a kizártak közt megtalálod.");
+  };
   $("#dPrio").onchange = (e) => {
     if (e.target.value) p.priority_overrides[c.id] = e.target.value;
     else delete p.priority_overrides[c.id];
@@ -920,7 +1469,7 @@ function renderOutreachView(p) {
     ...Object.keys(p.attraction || {}),
     ...pipelineRows(p).rows.map((r) => r.id),
   ]);
-  const rows = [...ids].map((id) => ({ id, cand: candById(p, id), ...orState(p, id) })).filter((r) => r.cand);
+  const rows = [...ids].map((id) => ({ id, cand: candById(p, id), ...orState(p, id) })).filter((r) => r.cand && !isExcluded(p, r.cand));
   rows.sort((a, b) => (b.hasDraft - a.hasDraft) || (a.sent - b.sent));
   if (!rows.length) {
     v.innerHTML = `<div class="stage"><div class="stage-head"><h2>Megkeresések</h2></div>
@@ -1162,21 +1711,37 @@ function renderNotes(p) {
 // ── STATIKUS GOMBOK (pozíció / célpiac / ügyfél nézetek) ────────────────
 $("#intakeBtn").onclick = (e) => needEngagement() && withLoading(e.target, async () => {
   const p = state.project;
+  // Az újraelemzés felülírja a véglegesített briefet — kézi szerkesztésnél kérdezünk.
+  if (p.brief_final && briefIsEdited(p) && !confirm("Már van szerkesztett véglegesített briefed. Az új elemzés felülírja. Folytatod?")) return;
   p.brief_raw = $("#briefInput").value;
   const out = await api("POST", `/api/project/${p.id}/intake`, { brief: p.brief_raw });
   p.intake = out;
   p.intake_review = null;
+  p.brief_final = null;
   persist();
   renderIntake(p);
-  toast("Elemzés kész — ellenőrizd a javaslatot.");
+  toast("Elemzés kész — szerkeszd és véglegesítsd a briefet.");
 });
 $("#queryBtn").onclick = (e) => needEngagement() && withLoading(e.target, async () => {
   const p = state.project;
-  const q = await api("POST", `/api/project/${p.id}/query`);
-  p.query = q;
+  const q = await api("POST", `/api/project/${p.id}/query`, { brief: finalBriefText(p), must_haves: (p.brief_final || {}).must_haves });
+  const had = !!p.query;
+  // A frissítés SOHA nem törli a kézzel felvett kategóriákat — egyesít.
+  p.query = mergeQueryPlan(p.query, q);
+  // Az ügyfél neve a kizárási listát vezérli, nem a terv szövegét.
   persist();
   renderCelpiac(p);
   renderEngHeader(p);
+  toast(had ? "Keresési terv frissítve — a kézi módosításaid megmaradtak." : "Keresési terv elkészült — szerkeszd szabadon.");
+});
+$("#queryResetBtn").onclick = (e) => needEngagement() && withLoading(e.target, async () => {
+  const p = state.project;
+  if (p.query && !confirm("Új terv nulláról: a kézzel felvett kategóriáid elvesznek. Folytatod?")) return;
+  p.query = await api("POST", `/api/project/${p.id}/query`, { brief: finalBriefText(p) });
+  persist();
+  renderCelpiac(p);
+  renderEngHeader(p);
+  toast("Új keresési terv készült.");
 });
 $("#talentBtn").onclick = (e) => needEngagement() && withLoading(e.target, async () => {
   const p = state.project;
@@ -1218,8 +1783,14 @@ $("#discoverBtn").onclick = (e) => needEngagement() && withLoading(e.target, asy
   }
   p.discover_source = out.source;
   if (p.status === "Előkészítés") p.status = "Kutatás folyamatban";
+  // Az ügyfél saját (volt) emberei nem kerülnek a listára — de nem is tűnnek el
+  // nyomtalanul: külön sávra kerülnek, indoklással, visszahozhatóan.
+  const blocked = excludedCandidates(p).length;
+  if (blocked) p.discover_note += ` · ${blocked} találat kizárva a merítésből (ügyfél jelenlegi/volt munkatársa vagy off-limits cég).`;
   persist();
-  toast(`${(out.candidates || []).length} találat feldolgozva.`);
+  toast(blocked
+    ? `${(out.candidates || []).length} találat · ${blocked} kizárva (ügyfél saját emberei).`
+    : `${(out.candidates || []).length} találat feldolgozva.`);
   showView("jeloltek");
 });
 $("#advisoryBtn").onclick = (e) => needEngagement() && withLoading(e.target, async () => {
