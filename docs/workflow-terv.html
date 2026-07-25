@@ -307,6 +307,34 @@ a{color:var(--mint-ink)}
 .plan .sz{font-family:var(--mono); font-size:13px; color:var(--mut); white-space:nowrap; width:1%}
 .plan b{color:var(--ink)}
 
+/* ── Állapotsáv: a terv megvalósult ── */
+.status{
+  background:var(--mint-soft); border:1px solid var(--mint); border-radius:12px;
+  padding:18px 22px; margin:-14px 0 4px; display:flex; gap:18px; align-items:flex-start; flex-wrap:wrap;
+}
+.status-tag{
+  font-family:var(--mono); font-size:11px; letter-spacing:.12em; text-transform:uppercase;
+  font-weight:800; color:var(--mint-ink); white-space:nowrap; padding-top:3px; flex:none;
+}
+.status-body{flex:1 1 420px; min-width:0}
+.status-body p{margin:0 0 10px; font-size:15px; max-width:none}
+.status-body p:last-child{margin-bottom:0}
+.status-delta{margin-bottom:6px!important}
+.status-list{margin:0; padding-left:20px; font-size:14.5px; display:flex; flex-direction:column; gap:5px}
+.status-list li::marker{color:var(--mint-ink)}
+.status a{color:var(--mint-ink); font-weight:700}
+
+.resolved{
+  background:var(--surface); border:1px solid var(--mint); border-left:3px solid var(--mint);
+  border-radius:9px; padding:14px 18px; margin-top:12px; font-size:15px; color:var(--ink-2);
+}
+.resolved-tag{
+  font-family:var(--mono); font-size:10.5px; letter-spacing:.12em; text-transform:uppercase;
+  font-weight:800; color:var(--mint-ink); margin-bottom:6px;
+}
+.resolved p{margin:0 0 9px; max-width:none}
+.resolved p:last-child{margin:0}
+
 .note{
   background:var(--surface-2); border:1px solid var(--line); border-left:3px solid var(--mint);
   border-radius:9px; padding:14px 18px; margin-top:22px; font-size:15px; color:var(--ink-2);
@@ -335,6 +363,21 @@ a{color:var(--mint-ink)}
 </header>
 
 <div class="wrap">
+
+  <!-- ── ÁLLAPOTSÁV: ez a terv már megvalósult ── -->
+  <aside class="status">
+    <div class="status-tag">Megvalósult · 2026-07-25</div>
+    <div class="status-body">
+      <p><strong>Ez a dokumentum terv volt — azóta elkészült.</strong> Az alábbi hat lépés a <code>main</code>-en van, mindegyik külön átnézhető változásként: <a href="https://github.com/gergolencses-lab/recruitment-intelligence-demo/pull/3">PR0</a> · <a href="https://github.com/gergolencses-lab/recruitment-intelligence-demo/pull/4">PR1</a> · <a href="https://github.com/gergolencses-lab/recruitment-intelligence-demo/pull/5">PR2</a> · <a href="https://github.com/gergolencses-lab/recruitment-intelligence-demo/pull/6">PR3</a> · <a href="https://github.com/gergolencses-lab/recruitment-intelligence-demo/pull/7">PR4</a> · <a href="https://github.com/gergolencses-lab/recruitment-intelligence-demo/pull/8">PR5</a>. A szöveg szándékosan úgy maradt, ahogy a döntés előtt megírtuk — így látszik, mit gondoltunk előre, és mit írt felül a mérés.</p>
+      <p class="status-delta"><b>Négy dolog alakult másképp:</b></p>
+      <ul class="status-list">
+        <li><b>Négy lépés helyett hat lett.</b> Elé került egy előkészítő lépés (az állapot-létra hat helyen volt kézzel újraírva — kiemelés nélkül a többi lépés szétcsúszott volna), mögé pedig a mobilnézet.</li>
+        <li><b>A nyitott kérdés eldőlt: tábla.</b> Alapértelmezésben tábla, kézi váltóval listára; keskeny képernyőn automatikusan lista. Lásd a 7. szakasz végét.</li>
+        <li><b>A harmadik oszlop neve „Jóváhagyás és küldés”.</b> A tervezéskor nem tűnt fel, hogy egy jóváhagyott, de még ki nem küldött vázlatnak nincs máshol helye — az oszlop két alállapotot fog.</li>
+        <li><b>A mintaadatot bővíteni kellett.</b> Méréssel derült ki, hogy az öt oszlopból kettő üresen maradt volna a demón, és az „Új” jelzés soha nem sült volna el.</li>
+      </ul>
+    </div>
+  </aside>
 
   <!-- ── 1. DIAGNÓZIS ── -->
   <section>
@@ -856,6 +899,12 @@ a{color:var(--mint-ink)}
     <div class="note">
       <p><strong>Ami nem fér bele, és nem is kellene:</strong> a fenti nem nyúl a szerveroldali sémához. A tábla oszlopai a meglévő <code>orState()</code> és <code>effTier()</code> állapotokból számolhatók, a tölcsér a meglévő <code>candidates</code> / <code>ranking</code> / <code>outreach_status</code> mezőkből. Adatmigráció nem kell.</p>
       <p><strong>Amit érdemes megnézni, mielőtt nekiállunk:</strong> valóban a tábla-e a jó forma, vagy egy csoportosított lista elég. A tábla akkor nyer, ha egy megbízáson jellemzően 10–40 jelölt van; 100 fölött a csoportosított lista jobban skálázik. Ez a demó 14-gyel dolgozik, tehát a tábla a jó tipp — de érdemes a valós számokon ellenőrizni.</p>
+    </div>
+
+    <div class="resolved">
+      <div class="resolved-tag">Eldőlt</div>
+      <p><b>Tábla, listaváltóval.</b> Alapértelmezés a tábla; a váltás böngészőnként megjegyződik. Nem kellett választani a kettő közül: mindkét elrendezés ugyanabból az öt állapotcsoportból épül, tehát ugyanazt az egy besorolást mutatják. Keskeny képernyőn a felület magától a listára vált, mert a vízszintes tábla ott használhatatlan.</p>
+      <p>A megvalósítás két ponton tért el a tervtől: a lépések száma négyről hatra nőtt, és a mintaadatot bővíteni kellett, hogy a tábla ne üres oszlopokat mutasson. Mindkettő mérésből jött, nem véleményből — a részletek az állapotsávban a lap tetején.</p>
     </div>
   </section>
 
